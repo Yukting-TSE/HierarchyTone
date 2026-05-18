@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>非视觉条件下听觉表征界面控制系统</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #F4F6F9;
+    color: #2D3748;
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  .top-bar {
+    height: 52px; background: #FFFFFF;
+    border-bottom: 1px solid #E2E8F0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .top-bar .logo { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; color: #1A202C; }
+  .top-bar .logo .icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, #667EEA, #764BA2);
+    border-radius: 7px; display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 14px; font-weight: 700;
+  }
+  .top-bar .meta { font-size: 12px; color: #A0AEC0; display: flex; align-items: center; gap: 18px; }
+
+  .main-wrapper { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+  .left-panel {
+    width: 280px; background: #FFFFFF; border-right: 1px solid #E2E8F0;
+    display: flex; flex-direction: column; flex-shrink: 0;
+    padding: 18px 16px; gap: 12px; overflow-y: auto;
+  }
+  .panel-section { background: #F7FAFC; border: 1px solid #EDF2F7; border-radius: 8px; padding: 14px; }
+  .panel-section h3 {
+    font-size: 12px; font-weight: 700; color: #718096;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
+  }
+  .condition-btn {
+    display: block; width: 100%; padding: 10px 12px; margin-bottom: 6px;
+    border: 1.5px solid #E2E8F0; border-radius: 6px; background: #FFFFFF;
+    font-size: 13px; font-weight: 500; color: #4A5568;
+    cursor: pointer; text-align: left; transition: all 0.15s;
+  }
+  .condition-btn:hover { border-color: #667EEA; color: #667EEA; }
+  .condition-btn.active { border-color: #667EEA; background: #EBF4FF; color: #4C51BF; font-weight: 600; }
+  .condition-btn .tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: 4px; font-weight: 600; }
+  .condition-btn .tag.t1 { background: #FED7D7; color: #C53030; }
+  .condition-btn .tag.t2 { background: #FEFCBF; color: #B7791F; }
+  .condition-btn .tag.t3 { background: #C6F6D5; color: #276749; }
+
+  .diff-row { display: flex; gap: 6px; }
+  .diff-btn {
+    flex: 1; padding: 8px 0; border: 1.5px solid #E2E8F0; border-radius: 6px;
+    background: #fff; font-size: 12px; font-weight: 500; color: #718096;
+    cursor: pointer; text-align: center; transition: all 0.15s;
+  }
+  .diff-btn:hover { border-color: #667EEA; }
+  .diff-btn.active { border-color: #667EEA; background: #EBF4FF; color: #4C51BF; font-weight: 600; }
+
+  .action-btn {
+    display: block; width: 100%; padding: 11px; border: none; border-radius: 7px;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .btn-primary { background: linear-gradient(135deg, #667EEA, #764BA2); color: #fff; }
+  .btn-primary:hover { opacity: 0.92; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+  .btn-secondary { background: #EDF2F7; color: #4A5568; margin-top: 6px; }
+  .btn-secondary:hover { background: #E2E8F0; }
+
+  .hint-text { font-size: 11px; color: #A0AEC0; line-height: 1.6; margin-top: 2px; }
+
+  /* —— 受试者输入 —— */
+  .input-row { display: flex; gap: 6px; align-items: center; }
+  .input-row label { font-size: 12px; color: #4A5568; font-weight: 500; min-width: 56px; }
+  .input-row input {
+    flex: 1; padding: 7px 10px; border: 1.5px solid #E2E8F0; border-radius: 5px;
+    font-size: 13px; color: #2D3748; outline: none; transition: border 0.15s;
+  }
+  .input-row input:focus { border-color: #667EEA; }
+
+  .center-area {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 20px; gap: 16px; min-width: 0;
+  }
+
+  .status-bar {
+    display: flex; align-items: center; gap: 20px; background: #FFFFFF;
+    border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px 22px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04); font-size: 13px;
+    flex-wrap: wrap; justify-content: center;
+  }
+  .status-item { display: flex; align-items: center; gap: 6px; }
+  .status-item .label { color: #A0AEC0; font-size: 11px; }
+  .status-item .value { font-weight: 600; color: #2D3748; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot-idle { background: #CBD5E0; }
+  .dot-running { background: #48BB78; animation: pulse 1.2s infinite; }
+  .dot-preview { background: #ED8936; animation: pulse 0.8s infinite; }
+  .dot-done { background: #667EEA; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .grid-container {
+    position: relative; display: grid;
+    grid-template-columns: repeat(4, 88px); grid-template-rows: repeat(4, 88px);
+    gap: 6px; background: #FFFFFF; border: 1px solid #E2E8F0;
+    border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .grid-cell {
+    width: 88px; height: 88px; border: 2px solid #E2E8F0; border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: #A0AEC0; background: #FAFBFC;
+    transition: all 0.2s; position: relative; user-select: none;
+  }
+  .grid-cell .note-label { font-size: 10px; margin-top: 3px; font-weight: 400; color: #CBD5E0; }
+  .grid-cell.on-path { border-color: #C3DAFE; background: #EBF8FF; color: #4C51BF; }
+  .grid-cell.current {
+    border-color: #667EEA; background: #667EEA; color: #FFFFFF;
+    box-shadow: 0 0 0 3px rgba(102,126,234,0.25); transform: scale(1.05);
+  }
+  .grid-cell.current .note-label { color: rgba(255,255,255,0.7); }
+  .grid-cell.target { border-color: #48BB78; background: #F0FFF4; color: #276749; }
+  .grid-cell.start-node { border-color: #ED8936; background: #FFFAF0; color: #C05621; }
+  .grid-cell.visited { background: #F0F4FF; border-color: #C3DAFE; }
+  .grid-cell.preview-highlight {
+    border-color: #ED8936; background: #FFFAF0; color: #C05621;
+    box-shadow: 0 0 0 3px rgba(237,137,54,0.25); transform: scale(1.06);
+  }
+  .grid-cell.error-flash { animation: errorShake 0.35s; border-color: #FC8181; background: #FFF5F5; }
+  @keyframes errorShake {
+    0%,100%{transform:translateX(0)} 20%{transform:translateX(-4px)} 40%{transform:translateX(4px)} 60%{transform:translateX(-3px)} 80%{transform:translateX(3px)}
+  }
+  .grid-cell.correct-flash { animation: correctPop 0.3s; }
+  @keyframes correctPop { 0%{transform:scale(1)} 50%{transform:scale(1.12)} 100%{transform:scale(1.05)} }
+
+  .path-overlay {
+    position: absolute; top: 20px; left: 20px;
+    width: calc(4*88px + 3*6px); height: calc(4*88px + 3*6px);
+    pointer-events: none;
+  }
+  .path-overlay svg { width: 100%; height: 100%; }
+  .path-line { stroke: #A3BFFA; stroke-width: 2; stroke-dasharray: 6 4; fill: none; opacity: 0.7; }
+
+  .arrow-hint { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .arrow-row { display: flex; gap: 4px; }
+  .arrow-key {
+    width: 38px; height: 34px; border: 1.5px solid #E2E8F0; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: #A0AEC0; background: #fff; transition: all 0.1s;
+  }
+  .arrow-key.pressed { background: #667EEA; color: #fff; border-color: #667EEA; }
+
+  .right-panel {
+    width: 310px; background: #FFFFFF; border-left: 1px solid #E2E8F0;
+    display: flex; flex-direction: column; flex-shrink: 0;
+    padding: 18px 16px; gap: 12px; overflow-y: auto;
+  }
+  .data-card { background: #F7FAFC; border: 1px solid #EDF2F7; border-radius: 8px; padding: 14px; }
+  .data-card h3 {
+    font-size: 12px; font-weight: 700; color: #718096;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid #EDF2F7; }
+  .metric-row:last-child { border-bottom: none; }
+  .metric-row .m-label { font-size: 12px; color: #718096; }
+  .metric-row .m-value { font-size: 14px; font-weight: 700; color: #2D3748; }
+  .metric-row .m-value.good { color: #38A169; }
+  .metric-row .m-value.warn { color: #D69E2E; }
+  .metric-row .m-value.bad { color: #E53E3E; }
+
+  .log-box {
+    flex: 1; min-height: 100px; max-height: 220px; background: #1A202C; border-radius: 8px;
+    padding: 12px; overflow-y: auto;
+    font-family: 'SF Mono','Fira Code','Consolas', monospace;
+    font-size: 11px; line-height: 1.7; color: #A0AEC0;
+  }
+  .log-entry { margin-bottom: 2px; }
+  .log-entry .time { color: #4A5568; }
+  .log-entry.info .msg { color: #63B3ED; }
+  .log-entry.move .msg { color: #68D391; }
+  .log-entry.error .msg { color: #FC8181; }
+  .log-entry.correct .msg { color: #F6E05E; }
+  .log-entry.system .msg { color: #B794F4; }
+  .log-entry.preview .msg { color: #F6AD55; }
+  .log-entry.save .msg { color: #4FD1C5; }
+
+  /* 弹窗 */
+  .modal-overlay {
+    display: none; position: fixed; top:0;left:0;right:0;bottom:0;
+    background: rgba(0,0,0,0.45); z-index: 1000;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 16px; padding: 0;
+    width: 600px; max-height: 90vh; overflow: hidden;
+    box-shadow: 0 25px 70px rgba(0,0,0,0.2);
+    display: flex; flex-direction: column;
+  }
+
+  /* TLX 弹窗专用样式 */
+  .tlx-header {
+    background: linear-gradient(135deg, #667EEA, #764BA2);
+    color: #fff; padding: 24px 32px;
+  }
+  .tlx-header h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .tlx-header p { font-size: 13px; opacity: 0.9; line-height: 1.5; }
+  .tlx-header .badge {
+    display: inline-block; background: rgba(255,255,255,0.2);
+    padding: 3px 10px; border-radius: 4px; font-size: 11px;
+    font-weight: 600; margin-bottom: 8px;
+  }
+  .tlx-body {
+    padding: 20px 32px; overflow-y: auto; flex: 1;
+  }
+  .tlx-item {
+    margin-bottom: 18px; padding: 14px;
+    background: #F7FAFC; border-radius: 8px;
+    border: 1px solid #EDF2F7;
+  }
+  .tlx-item-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .tlx-item-header .title-block { flex: 1; }
+  .tlx-item-header .title {
+    font-size: 14px; font-weight: 700; color: #2D3748; margin-bottom: 3px;
+  }
+  .tlx-item-header .desc {
+    font-size: 11px; color: #718096; line-height: 1.5;
+  }
+  .tlx-item-header .score {
+    font-size: 22px; font-weight: 800; color: #667EEA;
+    min-width: 50px; text-align: right;
+  }
+  .tlx-slider-wrap {
+    position: relative; padding: 4px 0;
+  }
+  .tlx-slider-wrap input[type=range] {
+    width: 100%; accent-color: #667EEA; height: 6px;
+  }
+  .tlx-anchors {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: #A0AEC0; margin-top: 4px;
+    padding: 0 2px;
+  }
+  .tlx-anchors .left-anchor { color: #38A169; font-weight: 600; }
+  .tlx-anchors .right-anchor { color: #E53E3E; font-weight: 600; }
+
+  .tlx-footer {
+    padding: 16px 32px;
+    background: #F7FAFC; border-top: 1px solid #EDF2F7;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .tlx-footer .tip { font-size: 11px; color: #A0AEC0; }
+  .tlx-footer .actions { display: flex; gap: 10px; }
+
+  .result-summary { text-align: center; padding: 20px; }
+  .result-summary h2 { font-size: 22px; font-weight: 700; color: #1A202C; margin-bottom: 4px; }
+  .result-summary .big-num {
+    font-size: 48px; font-weight: 800;
+    background: linear-gradient(135deg, #667EEA, #48BB78);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    line-height: 1.1; margin: 8px 0 4px 0;
+  }
+  .result-summary .sub { font-size: 13px; color: #718096; margin-bottom: 16px; }
+
+  .cond-tag { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+  .cond-tag.c1 { background: #FED7D7; color: #C53030; }
+  .cond-tag.c2 { background: #FEFCBF; color: #B7791F; }
+  .cond-tag.c3 { background: #C6F6D5; color: #276749; }
+
+  .bottom-bar {
+    height: 30px; background: #FFFFFF; border-top: 1px solid #E2E8F0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; font-size: 11px; color: #A0AEC0; flex-shrink: 0;
+  }
+
+  .preview-bar-wrap {
+    display: none; width: 100%; max-width: 400px;
+    background: #EDF2F7; border-radius: 6px; height: 6px; overflow: hidden;
+  }
+  .preview-bar-wrap.active { display: block; }
+  .preview-bar-fill {
+    height: 100%; background: linear-gradient(90deg, #ED8936, #F6AD55);
+    border-radius: 6px; transition: width 0.3s; width: 0%;
+  }
+  .preview-round-tag {
+    display: inline-block; background: #FEEBC8; color: #C05621;
+    padding: 2px 8px; border-radius: 4px; font-size: 11px;
+    font-weight: 700; margin-left: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">
+    <div class="icon">A</div>
+    非视觉听觉表征界面控制实验系统
+  </div>
+  <div class="meta">
+    <span>📐 4×4 状态空间</span>
+    <span>🎵 旋律绝对编码</span>
+    <span id="clockDisplay">--:--:--</span>
+  </div>
+</div>
+
+<div class="main-wrapper">
+
+  <div class="left-panel">
+    <div class="panel-section">
+      <h3>受试者信息</h3>
+      <div class="input-row">
+        <label>编号</label>
+        <input type="text" id="subjectId" placeholder="如 P01" value="P01">
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>实验条件</h3>
+      <button class="condition-btn active" data-cond="1" onclick="selectCondition(1)">
+        条件一：非结构化 <span class="tag t1">C1</span>
+      </button>
+      <button class="condition-btn" data-cond="2" onclick="selectCondition(2)">
+        条件二：仅区分性 <span class="tag t2">C2</span>
+      </button>
+      <button class="condition-btn" data-cond="3" onclick="selectCondition(3)">
+        条件三：完全结构化 <span class="tag t3">C3</span>
+      </button>
+      <div class="hint-text" id="condDesc">所有节点播放相同纯音，无差异化反馈。</div>
+    </div>
+
+    <div class="panel-section">
+      <h3>路径复杂度</h3>
+      <div class="diff-row">
+        <button class="diff-btn active" data-diff="simple" onclick="selectDifficulty('simple')">简单（6步）</button>
+        <button class="diff-btn" data-diff="complex" onclick="selectDifficulty('complex')">复杂（10步）</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>任务控制</h3>
+      <button class="action-btn btn-primary" id="btnStart" onclick="startTask()">▶ 开始任务</button>
+      <button class="action-btn btn-secondary" onclick="resetTask()">↺ 重置</button>
+    </div>
+
+    <div class="panel-section">
+      <h3>操作方式</h3>
+      <div class="arrow-hint">
+        <div class="arrow-row"><div class="arrow-key" id="keyUp">↑</div></div>
+        <div class="arrow-row">
+          <div class="arrow-key" id="keyLeft">←</div>
+          <div class="arrow-key" id="keyDown">↓</div>
+          <div class="arrow-key" id="keyRight">→</div>
+        </div>
+      </div>
+      <div class="hint-text" style="margin-top:8px; text-align:center;">方向键移动 · 空格重播 · ESC中断</div>
+    </div>
+  </div>
+
+  <div class="center-area">
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-dot dot-idle" id="statusDot"></span>
+        <span class="value" id="statusText">等待开始</span>
+      </div>
+      <div class="status-item">
+        <span class="label">条件</span>
+        <span class="cond-tag c1" id="condTagDisplay">C1</span>
+      </div>
+      <div class="status-item">
+        <span class="label">路径</span>
+        <span class="value" id="pathDisplay">--</span>
+      </div>
+      <div class="status-item">
+        <span class="label">当前位置</span>
+        <span class="value" id="posDisplay">--</span>
+      </div>
+      <div class="status-item">
+        <span class="label">步数</span>
+        <span class="value" id="stepDisplay">0 / --</span>
+      </div>
+      <div class="status-item">
+        <span class="label">计时</span>
+        <span class="value" id="timerDisplay">0.0s</span>
+      </div>
+    </div>
+
+    <div class="preview-bar-wrap" id="previewBarWrap">
+      <div class="preview-bar-fill" id="previewBarFill"></div>
+    </div>
+
+    <div class="grid-container" id="gridContainer">
+      <div class="path-overlay" id="pathOverlay">
+        <svg id="pathSvg"></svg>
+      </div>
+    </div>
+
+    <div style="opacity:0.5">
+      <div style="font-size:11px; color:#A0AEC0;">键盘方向键控制移动 · 空格键播放当前节点音</div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="data-card">
+      <h3>📊 实时数据</h3>
+      <div class="metric-row"><span class="m-label">总操作次数</span><span class="m-value" id="metricTotal">0</span></div>
+      <div class="metric-row"><span class="m-label">错误次数</span><span class="m-value" id="metricErrors">0</span></div>
+      <div class="metric-row"><span class="m-label">导航错误率</span><span class="m-value" id="metricErrorRate">0.0%</span></div>
+      <div class="metric-row"><span class="m-label">纠正次数</span><span class="m-value" id="metricCorrections">0</span></div>
+      <div class="metric-row"><span class="m-label">纠正事件比例</span><span class="m-value" id="metricCorrRate">--</span></div>
+      <div class="metric-row"><span class="m-label">任务用时</span><span class="m-value" id="metricTime">0.0s</span></div>
+    </div>
+    <div class="data-card">
+      <h3>🎵 当前声音</h3>
+      <div class="metric-row"><span class="m-label">节点音符</span><span class="m-value" id="metricNote">--</span></div>
+      <div class="metric-row"><span class="m-label">频率</span><span class="m-value" id="metricFreq">--</span></div>
+      <div class="metric-row"><span class="m-label">旋律位置</span><span class="m-value" id="metricMelPos">--</span></div>
+    </div>
+    <div class="data-card" style="flex:1; display:flex; flex-direction:column;">
+      <h3>📋 事件日志</h3>
+      <div class="log-box" id="logBox"></div>
+    </div>
+    <button class="action-btn btn-secondary" onclick="exportData()">💾 导出全部历史数据</button>
+  </div>
+</div>
+
+<div class="bottom-bar">
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.3</span>
+  <span id="audioStatus">🔊 Web Audio API 就绪</span>
+</div>
+
+<!-- ===== 任务完成提示弹窗 ===== -->
+<div class="modal-overlay" id="resultModal">
+  <div class="modal" style="width:440px">
+    <div class="result-summary">
+      <h2>✅ 任务完成</h2>
+      <div class="big-num" id="resultTime">--</div>
+      <p class="sub">任务用时（秒）</p>
+      <div class="data-card" style="margin:0 8px 12px 8px; text-align:left">
+        <div class="metric-row"><span class="m-label">导航错误率</span><span class="m-value" id="resultErrorRate">--</span></div>
+        <div class="metric-row"><span class="m-label">纠正事件比例</span><span class="m-value" id="resultCorrRate">--</span></div>
+        <div class="metric-row"><span class="m-label">实验条件</span><span class="m-value" id="resultCond">--</span></div>
+        <div class="metric-row"><span class="m-label">路径复杂度</span><span class="m-value" id="resultDiff">--</span></div>
+        <div class="metric-row"><span class="m-label">数据已自动保存</span><span class="m-value good" id="resultSaved">--</span></div>
+      </div>
+      <div style="font-size:13px; color:#718096; padding:0 16px;">
+        即将进入 <strong style="color:#667EEA">NASA-TLX 任务负荷评估</strong>
+      </div>
+    </div>
+    <div style="padding:16px 32px; background:#F7FAFC; border-top:1px solid #EDF2F7; display:flex; justify-content:center;">
+      <button class="action-btn btn-primary" style="width:auto;padding:10px 36px" onclick="proceedToTLX()">继续 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== NASA-TLX 弹窗（重新设计） ===== -->
+<div class="modal-overlay" id="tlxModal">
+  <div class="modal">
+    <div class="tlx-header">
+      <span class="badge" id="tlxBadge">条件 C1 · 简单路径</span>
+      <h2>📋 NASA-TLX 任务负荷评估</h2>
+      <p>请回想刚才完成任务时的体验，对以下六个维度进行评分（0–100）。<br>请如实评估，没有标准答案。</p>
+    </div>
+
+    <div class="tlx-body">
+      <!-- 1. 心理需求 -->
+      <div class="tlx-item">
+        <div class="tlx-item-header">
+          <div class="title-block">
+            <div class="title">① 心理需求 Mental Demand</div>
+            <div class="desc">任务需要多少思考、判断、计算、记忆？任务是简单还是复杂？</div>
+          </div>
+          <div class="score" id="score_mental">50</div>
+        </div>
+        <div class="tlx-slider-wrap">
+          <input type="range" min="0" max="100" value="50" id="tlx_mental" oninput="updateTlxVal(this,'mental')">
+          <div class="tlx-anchors"><span class="left-anchor">非常低</span><span>中等</span><span class="right-anchor">非常高</span></div>
+        </div>
+      </div>
+
+      <!-- 2. 身体需求 -->
+      <div class="tlx-item">
+        <div class="tlx-item-header">
+          <div class="title-block">
+            <div class="title">② 身体需求 Physical Demand</div>
+            <div class="desc">任务需要多少身体活动？操作是轻松还是费力、紧张？</div>
+          </div>
+          <div class="score" id="score_physical">20</div>
+        </div>
+        <div class="tlx-slider-wrap">
+          <input type="range" min="0" max="100" value="20" id="tlx_physical" oninput="updateTlxVal(this,'physical')">
+          <div class="tlx-anchors"><span class="left-anchor">非常低</span><span>中等</span><span class="right-anchor">非常高</span></div>
+        </div>
+      </div>
+
+      <!-- 3. 时间压力 -->
+      <div class="tlx-item">
+        <div class="tlx-item-header">
+          <div class="title-block">
+            <div class="title">③ 时间压力 Temporal Demand</div>
+            <div class="desc">完成任务时感受到的时间紧迫程度？节奏从容还是匆忙？</div>
+          </div>
+          <div class="score" id="score_temporal">50</div>
+        </div>
+        <div class="tlx-slider-wrap">
+          <input type="range" min="0" max="100" value="50" id="tlx_temporal" oninput="updateTlxVal(this,'temporal')">
+          <div class="tlx-anchors"><span class="left-anchor">非常低</span><span>中等</span><span class="right-anchor">非常高</span></div>
+        </div>
+      </div>
+
+      <!-- 4. 绩效（反向） -->
+      <div class="tlx-item">
+        <div class="tlx-item-header">
+          <div class="title-block">
+            <div class="title">④ 绩效 Performance</div>
+            <div class="desc">您觉得自己完成任务的成功程度如何？（数值越高表示对自己表现越不满意）</div>
+          </div>
+          <div class="score" id="score_performance">50</div>
+        </div>
+        <div class="tlx-slider-wrap">
+          <input type="range" min="0" max="100" value="50" id="tlx_performance" oninput="updateTlxVal(this,'performance')">
+          <div class="tlx-anchors"><span class="left-anchor">完美</span><span>一般</span><span class="right-anchor">失败</span></div>
+        </div>
+      </div>
+
+      <!-- 5. 努力程度 -->
+      <div class="tlx-item">
+        <div class="tlx-item-header">
+          <div class="title-block">
+            <div class="title">⑤ 努力程度 Effort</div>
+            <div class="desc">为达到目前的表现水平，您付出了多少努力（脑力 + 体力）？</div>
+          </div>
+          <div class="score" id="score_effort">50</div>
+        </div>
+        <div class="tlx-slider-wrap">
+          <input type="range" min="0" max="100" value="50" id="tlx_effort" oninput="updateTlxVal(this,'effort')">
+          <div class="tlx-anchors"><span class="left-anchor">非常低</span><span>中等</span><span class="right-anchor">非常高</span></div>
+        </div>
+      </div>
+
+      <!-- 6. 挫败感 -->
+      <div class="tlx-item">
+        <div class="tlx-item-header">
+          <div class="title-block">
+            <div class="title">⑥ 挫败感 Frustration</div>
+            <div class="desc">您在任务过程中感到多少烦躁、沮丧、紧张？反之则放松、满足、自信。</div>
+          </div>
+          <div class="score" id="score_frustration">50</div>
+        </div>
+        <div class="tlx-slider-wrap">
+          <input type="range" min="0" max="100" value="50" id="tlx_frustration" oninput="updateTlxVal(this,'frustration')">
+          <div class="tlx-anchors"><span class="left-anchor">非常低</span><span>中等</span><span class="right-anchor">非常高</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tlx-footer">
+      <span class="tip">💡 提交后将自动保存评分到本次任务数据</span>
+      <div class="actions">
+        <button class="action-btn btn-secondary" style="width:auto;padding:10px 22px;margin:0" onclick="skipTLX()">跳过</button>
+        <button class="action-btn btn-primary" style="width:auto;padding:10px 28px" onclick="submitTLX()">提交评分</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  全局
+// ============================================================
+const GRID = 4;
+let audioCtx = null;
+let previewAbort = false;
+
+let state = {
+  condition: 1,
+  difficulty: 'simple',
+  phase: 'idle',
+  currentPos: null,
+  path: [],
+  pathIdx: 0,
+  onPath: true,
+  startTime: 0,
+  elapsed: 0,
+  timerInterval: null,
+  totalMoves: 0,
+  errorCount: 0,
+  corrections: 0,
+  lastWasError: false,
+  visitedCells: new Set(),
+  eventLog: [],
+  currentTrial: null, // 当前进行/刚完成的试次数据
+  trialCounter: { 1: 0, 2: 0, 3: 0 }, // 各条件已完成次数
+  allTrials: []
+};
+
+// ============================================================
+//  旋律 L3 编码
+// ============================================================
+const MELODY_ROW = ['C','E','G','A'];
+const ROW_TRANSPOSE = [0, 4, 7, 12];
+const NOTE_SEMITONES = {'C':0,'D':2,'E':4,'F':5,'G':7,'A':9,'B':11};
+
+function calcFreq(st) { return 261.63 * Math.pow(2, st / 12); }
+function getNodeFreq(r, c) {
+  return calcFreq(NOTE_SEMITONES[MELODY_ROW[c]] + ROW_TRANSPOSE[r]);
+}
+function getNodeNoteName(r, c) {
+  const semi = NOTE_SEMITONES[MELODY_ROW[c]] + ROW_TRANSPOSE[r];
+  const oct = 4 + Math.floor(semi / 12);
+  const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  return names[semi % 12] + oct;
+}
+
+// ============================================================
+//  路径
+// ============================================================
+const PATHS = {
+  simple: [
+    [{r:0,c:0},{r:0,c:1},{r:0,c:2},{r:1,c:2},{r:2,c:2},{r:2,c:3},{r:3,c:3}],
+    [{r:3,c:0},{r:2,c:0},{r:1,c:0},{r:1,c:1},{r:1,c:2},{r:0,c:2},{r:0,c:3}],
+    [{r:0,c:3},{r:1,c:3},{r:1,c:2},{r:2,c:2},{r:2,c:1},{r:3,c:1},{r:3,c:0}],
+  ],
+  complex: [
+    [{r:0,c:0},{r:0,c:1},{r:1,c:1},{r:1,c:2},{r:1,c:3},{r:2,c:3},{r:2,c:2},{r:3,c:2},{r:3,c:1},{r:3,c:0},{r:2,c:0}],
+    [{r:3,c:3},{r:3,c:2},{r:2,c:2},{r:2,c:1},{r:1,c:1},{r:0,c:1},{r:0,c:2},{r:0,c:3},{r:1,c:3},{r:2,c:3},{r:2,c:2}],
+    [{r:0,c:0},{r:1,c:0},{r:2,c:0},{r:3,c:0},{r:3,c:1},{r:2,c:1},{r:2,c:2},{r:2,c:3},{r:1,c:3},{r:0,c:3},{r:0,c:2}],
+  ]
+};
+
+function getRandomPath() {
+  const arr = PATHS[state.difficulty];
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// ============================================================
+//  Web Audio
+// ============================================================
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, dur = 0.5, type = 'sine', vol = 0.3) {
+  ensureAudio();
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime + dur);
+}
+
+function playClick(dur = 0.08) {
+  ensureAudio();
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'square'; o.frequency.value = 800;
+  g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime + dur);
+}
+
+// 噪声音量增大：0.35 -> 0.85，并提高峰值幅度
+function playNoise(dur = 0.35) {
+  ensureAudio();
+  const sz = audioCtx.sampleRate * dur;
+  const buf = audioCtx.createBuffer(1, sz, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < sz; i++) d[i] = (Math.random()*2-1) * 0.95; // 提高
+  const s = audioCtx.createBufferSource(), g = audioCtx.createGain();
+  s.buffer = buf;
+  g.gain.setValueAtTime(0.85, audioCtx.currentTime); // 显著提高
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  s.connect(g); g.connect(audioCtx.destination);
+  s.start(); s.stop(audioCtx.currentTime + dur);
+}
+
+function playTransitionCue(nr, nc) {
+  playClick(0.06);
+  setTimeout(() => playNodeSound(nr, nc), 100);
+}
+
+function playNodeSound(r, c) {
+  if (state.condition === 1) {
+    playTone(261.63, 0.5, 'sine', 0.3);
+  } else {
+    const freq = getNodeFreq(r, c);
+    playTone(freq, 0.5, 'sine', 0.35);
+    updateSoundInfo(r, c, freq);
+  }
+}
+
+function playCorrectionConfirm(r, c) {
+  const freq = getNodeFreq(r, c);
+  playTone(freq * 0.8, 0.15, 'sine', 0.2);
+  setTimeout(() => playTone(freq, 0.35, 'sine', 0.35), 160);
+}
+
+function updateSoundInfo(r, c, freq) {
+  document.getElementById('metricNote').textContent = getNodeNoteName(r, c);
+  document.getElementById('metricFreq').textContent = Math.round(freq) + ' Hz';
+  document.getElementById('metricMelPos').textContent = `行${r+1}·列${c+1} (${MELODY_ROW[c]}+${ROW_TRANSPOSE[r]}st)`;
+}
+
+// ============================================================
+//  旋律预听 — 现在播放3次
+// ============================================================
+async function playPathPreview(path) {
+  previewAbort = false;
+  const PREVIEW_ROUNDS = 3;
+  const barWrap = document.getElementById('previewBarWrap');
+  const barFill = document.getElementById('previewBarFill');
+  barWrap.classList.add('active');
+
+  document.getElementById('statusDot').className = 'status-dot dot-preview';
+
+  const NOTE_DUR = 480;
+  const NOTE_GAP = 160;
+  const STEP_TIME = NOTE_DUR + NOTE_GAP;
+  const ROUND_GAP = 800; // 每轮之间间隔
+
+  const totalSteps = PREVIEW_ROUNDS * path.length;
+  let stepCount = 0;
+
+  for (let round = 1; round <= PREVIEW_ROUNDS; round++) {
+    if (previewAbort) break;
+
+    document.getElementById('statusText').innerHTML =
+      `旋律预听中 <span class="preview-round-tag">第 ${round}/${PREVIEW_ROUNDS} 遍</span>`;
+    addLog('preview', `▶ 第 ${round}/${PREVIEW_ROUNDS} 遍预听 — 共 ${path.length} 个节点`);
+
+    for (let i = 0; i < path.length; i++) {
+      if (previewAbort) break;
+      const node = path[i];
+      const freq = getNodeFreq(node.r, node.c);
+      const name = getNodeNoteName(node.r, node.c);
+
+      clearPreviewHighlight();
+      const cell = document.getElementById(`cell-${node.r}-${node.c}`);
+      if (cell) cell.classList.add('preview-highlight');
+
+      playTone(freq, NOTE_DUR / 1000, 'sine', 0.4);
+      updateSoundInfo(node.r, node.c, freq);
+
+      addLog('preview', `  ♪ R${round}·节点(${node.r},${node.c}) → ${name} [${Math.round(freq)}Hz] (${i+1}/${path.length})`);
+
+      stepCount++;
+      barFill.style.width = (stepCount / totalSteps * 100) + '%';
+
+      await sleep(STEP_TIME);
+    }
+
+    // 每轮间隔（最后一轮不间隔）
+    if (round < PREVIEW_ROUNDS && !previewAbort) {
+      clearPreviewHighlight();
+      await sleep(ROUND_GAP);
+    }
+  }
+
+  clearPreviewHighlight();
+  barWrap.classList.remove('active');
+  barFill.style.width = '0%';
+
+  if (!previewAbort) {
+    addLog('preview', `✓ 旋律预听完成（共 ${PREVIEW_ROUNDS} 遍）— 任务即将开始`);
+    await sleep(500);
+  }
+}
+
+function clearPreviewHighlight() {
+  document.querySelectorAll('.grid-cell.preview-highlight').forEach(el => el.classList.remove('preview-highlight'));
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ============================================================
+//  网格
+// ============================================================
+function buildGrid() {
+  const ct = document.getElementById('gridContainer');
+  const ov = document.getElementById('pathOverlay');
+  ct.innerHTML = ''; ct.appendChild(ov);
+  for (let r = 0; r < GRID; r++)
+    for (let c = 0; c < GRID; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'grid-cell'; cell.id = `cell-${r}-${c}`;
+      cell.innerHTML = `<span>${r},${c}</span><span class="note-label">${getNodeNoteName(r,c)}</span>`;
+      ct.insertBefore(cell, ov);
+    }
+}
+
+function refreshGrid() {
+  for (let r = 0; r < GRID; r++)
+    for (let c = 0; c < GRID; c++) {
+      const cell = document.getElementById(`cell-${r}-${c}`);
+      cell.className = 'grid-cell';
+      if (state.visitedCells.has(`${r},${c}`)) cell.classList.add('visited');
+      if (state.path.some(p => p.r===r && p.c===c)) cell.classList.add('on-path');
+      if (state.path.length > 0) {
+        const s = state.path[0];
+        if (s.r===r && s.c===c) cell.classList.add('start-node');
+        const t = state.path[state.path.length-1];
+        if (t.r===r && t.c===c) cell.classList.add('target');
+      }
+      if (state.currentPos && state.currentPos.r===r && state.currentPos.c===c)
+        cell.classList.add('current');
+    }
+  drawPathArrows();
+}
+
+function flashCell(r, c, cls) {
+  const cell = document.getElementById(`cell-${r}-${c}`);
+  cell.classList.add(cls);
+  setTimeout(() => cell.classList.remove(cls), 400);
+}
+
+function drawPathArrows() {
+  const svg = document.getElementById('pathSvg');
+  svg.innerHTML = '';
+  if (state.path.length < 2) return;
+  const S = 88, G = 6;
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+  const mk = document.createElementNS('http://www.w3.org/2000/svg','marker');
+  mk.setAttribute('id','ah'); mk.setAttribute('markerWidth','8');
+  mk.setAttribute('markerHeight','6'); mk.setAttribute('refX','7');
+  mk.setAttribute('refY','3'); mk.setAttribute('orient','auto');
+  const pl = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  pl.setAttribute('points','0 0, 8 3, 0 6'); pl.setAttribute('fill','#A3BFFA');
+  mk.appendChild(pl); defs.appendChild(mk); svg.appendChild(defs);
+  for (let i = 0; i < state.path.length-1; i++) {
+    const a = state.path[i], b = state.path[i+1];
+    const ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+    ln.setAttribute('x1', a.c*(S+G)+S/2); ln.setAttribute('y1', a.r*(S+G)+S/2);
+    ln.setAttribute('x2', b.c*(S+G)+S/2); ln.setAttribute('y2', b.r*(S+G)+S/2);
+    ln.setAttribute('class','path-line'); ln.setAttribute('marker-end','url(#ah)');
+    svg.appendChild(ln);
+  }
+}
+
+// ============================================================
+//  条件 & 难度
+// ============================================================
+const COND_DESC = {
+  1: '所有节点播放相同纯音（C4），无差异化反馈。无旋律预听。',
+  2: '节点对应旋律L3唯一音符。任务前播放3遍路径旋律。无方向提示和误差信号。',
+  3: '旋律绝对编码 + 3遍预听 + 方向过渡提示 + 强误差噪声 + 纠正确认。完整结构闭环。'
+};
+
+function selectCondition(c) {
+  if (state.phase !== 'idle') return;
+  state.condition = c;
+  document.querySelectorAll('.condition-btn').forEach(b =>
+    b.classList.toggle('active', parseInt(b.dataset.cond) === c));
+  document.getElementById('condDesc').textContent = COND_DESC[c];
+  const tag = document.getElementById('condTagDisplay');
+  tag.textContent = 'C'+c; tag.className = 'cond-tag c'+c;
+  addLog('system', `切换至条件${c}`);
+}
+
+function selectDifficulty(d) {
+  if (state.phase !== 'idle') return;
+  state.difficulty = d;
+  document.querySelectorAll('.diff-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.diff === d));
+  addLog('system', `路径复杂度：${d==='simple'?'简单（6步）':'复杂（10步）'}`);
+}
+
+// ============================================================
+//  路径工具
+// ============================================================
+function findNodeInPath(r, c) {
+  for (let i = 0; i < state.path.length; i++)
+    if (state.path[i].r === r && state.path[i].c === c) return i;
+  return -1;
+}
+
+// ============================================================
+//  任务流程
+// ============================================================
+async function startTask() {
+  if (state.phase !== 'idle') return;
+  ensureAudio();
+
+  state.path = getRandomPath();
+  state.currentPos = { ...state.path[0] };
+  state.pathIdx = 0;
+  state.onPath = true;
+  state.totalMoves = 0;
+  state.errorCount = 0;
+  state.corrections = 0;
+  state.lastWasError = false;
+  state.visitedCells = new Set();
+  state.visitedCells.add(`${state.currentPos.r},${state.currentPos.c}`);
+  state.eventLog = [];
+
+  document.getElementById('btnStart').disabled = true;
+  const s = state.path[0], t = state.path[state.path.length-1];
+  document.getElementById('pathDisplay').textContent = `(${s.r},${s.c}) → (${t.r},${t.c})`;
+  document.getElementById('posDisplay').textContent = `(${s.r},${s.c})`;
+  document.getElementById('stepDisplay').textContent = `0 / ${state.path.length-1}`;
+
+  refreshGrid();
+  updateMetrics();
+
+  addLog('system', `任务准备 — 条件${state.condition} · ${state.difficulty==='simple'?'简单':'复杂'}路径`);
+  addLog('info', `起点 (${s.r},${s.c}) → 终点 (${t.r},${t.c})，共 ${state.path.length-1} 步`);
+
+  if (state.condition >= 2) {
+    state.phase = 'preview';
+    addLog('system', `条件${state.condition}：开始播放路径旋律预听（共 3 遍）`);
+    await playPathPreview(state.path);
+    if (previewAbort) {
+      addLog('system', '旋律预听被中断');
+      resetTask();
+      return;
+    }
+  } else {
+    addLog('system', '条件一：跳过旋律预听');
+  }
+
+  state.phase = 'running';
+  document.getElementById('statusDot').className = 'status-dot dot-running';
+  document.getElementById('statusText').textContent = '任务进行中';
+
+  playNodeSound(state.currentPos.r, state.currentPos.c);
+  if (state.condition === 1) {
+    document.getElementById('metricNote').textContent = 'C4 (统一)';
+    document.getElementById('metricFreq').textContent = '262 Hz';
+    document.getElementById('metricMelPos').textContent = '--';
+  }
+
+  refreshGrid();
+
+  state.startTime = performance.now();
+  state.timerInterval = setInterval(() => {
+    state.elapsed = (performance.now() - state.startTime) / 1000;
+    document.getElementById('timerDisplay').textContent = state.elapsed.toFixed(1) + 's';
+    document.getElementById('metricTime').textContent = state.elapsed.toFixed(1) + 's';
+  }, 100);
+
+  addLog('system', '▶ 任务正式开始 — 计时已启动');
+}
+
+function endTask() {
+  state.phase = 'done';
+  clearInterval(state.timerInterval);
+  state.elapsed = (performance.now() - state.startTime) / 1000;
+
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('statusDot').className = 'status-dot dot-done';
+  document.getElementById('statusText').textContent = '任务完成';
+
+  // 生成本次试次数据
+  state.trialCounter[state.condition]++;
+  const trial = {
+    subjectId: document.getElementById('subjectId').value || 'P00',
+    condition: state.condition,
+    trialNumber: state.trialCounter[state.condition],
+    difficulty: state.difficulty,
+    pathLength: state.path.length - 1,
+    path: state.path,
+    totalMoves: state.totalMoves,
+    errors: state.errorCount,
+    errorRate: state.totalMoves > 0 ? (state.errorCount / state.totalMoves) : 0,
+    corrections: state.corrections,
+    correctionRate: state.errorCount > 0 ? (state.corrections / state.errorCount) : null,
+    time: state.elapsed,
+    timestamp: new Date().toISOString(),
+    log: [...state.eventLog],
+    tlx: null  // 待用户填写后写入
+  };
+  state.currentTrial = trial;
+  state.allTrials.push(trial);
+
+  addLog('system', `任务完成！用时 ${state.elapsed.toFixed(1)}s · 错误率 ${(trial.errorRate*100).toFixed(1)}%`);
+
+  // 自动保存（无TLX的初版）
+  const filename = autoSaveTrial(trial);
+  trial._savedFilename = filename;
+
+  // 显示结果弹窗
+  document.getElementById('resultTime').textContent = state.elapsed.toFixed(1);
+  document.getElementById('resultErrorRate').textContent = (trial.errorRate*100).toFixed(1)+'%';
+  document.getElementById('resultCorrRate').textContent = trial.correctionRate !== null
+    ? (trial.correctionRate*100).toFixed(1)+'%' : 'N/A';
+  document.getElementById('resultCond').textContent = `条件${state.condition} (第${trial.trialNumber}次)`;
+  document.getElementById('resultDiff').textContent = state.difficulty==='simple'?'简单（6步）':'复杂（10步）';
+  document.getElementById('resultSaved').textContent = '✓ ' + filename;
+  document.getElementById('resultModal').classList.add('show');
+
+  playTone(523.25,0.15,'sine',0.3);
+  setTimeout(()=>playTone(659.25,0.15,'sine',0.3),180);
+  setTimeout(()=>playTone(783.99,0.4,'sine',0.35),360);
+
+  state.phase = 'idle';
+}
+
+function proceedToTLX() {
+  document.getElementById('resultModal').classList.remove('show');
+  // 重置滑块到默认值
+  const defaults = { mental:50, physical:20, temporal:50, performance:50, effort:50, frustration:50 };
+  Object.entries(defaults).forEach(([k,v]) => {
+    document.getElementById('tlx_'+k).value = v;
+    document.getElementById('score_'+k).textContent = v;
+  });
+  // 更新badge
+  const t = state.currentTrial;
+  document.getElementById('tlxBadge').textContent =
+    `条件 C${t.condition} · ${t.difficulty==='simple'?'简单路径':'复杂路径'} · 第 ${t.trialNumber} 次`;
+  document.getElementById('tlxModal').classList.add('show');
+}
+
+function resetTask() {
+  previewAbort = true;
+  state.phase = 'idle';
+  clearInterval(state.timerInterval);
+  clearPreviewHighlight();
+  document.getElementById('previewBarWrap').classList.remove('active');
+
+  state.currentPos = null; state.path = []; state.pathIdx = 0;
+  state.onPath = true; state.totalMoves = 0;
+  state.errorCount = 0; state.corrections = 0;
+  state.lastWasError = false; state.visitedCells = new Set();
+  state.elapsed = 0;
+
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('statusDot').className = 'status-dot dot-idle';
+  document.getElementById('statusText').textContent = '等待开始';
+  document.getElementById('pathDisplay').textContent = '--';
+  document.getElementById('posDisplay').textContent = '--';
+  document.getElementById('stepDisplay').textContent = '0 / --';
+  document.getElementById('timerDisplay').textContent = '0.0s';
+  document.getElementById('metricNote').textContent = '--';
+  document.getElementById('metricFreq').textContent = '--';
+  document.getElementById('metricMelPos').textContent = '--';
+  updateMetrics(); buildGrid(); refreshGrid();
+  addLog('system', '任务已重置');
+}
+
+// ============================================================
+//  自动保存
+// ============================================================
+function formatTimestamp(date) {
+  const pad = n => String(n).padStart(2,'0');
+  return `${date.getFullYear()}${pad(date.getMonth()+1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+function autoSaveTrial(trial) {
+  // 命名格式: C{cond}-{number}-{time}.json
+  const timeStr = formatTimestamp(new Date());
+  const filename = `C${trial.condition}-${trial.trialNumber}-${timeStr}.json`;
+
+  const blob = new Blob([JSON.stringify(trial, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+
+  addLog('save', `💾 已自动保存：${filename}`);
+  return filename;
+}
+
+function autoSaveTrialWithTLX(trial) {
+  // 提交TLX后再次保存（含完整数据）
+  const timeStr = formatTimestamp(new Date());
+  const filename = `C${trial.condition}-${trial.trialNumber}-${timeStr}-with-TLX.json`;
+
+  const blob = new Blob([JSON.stringify(trial, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+
+  addLog('save', `💾 含TLX完整数据已保存：${filename}`);
+  return filename;
+}
+
+// ============================================================
+//  移动处理
+// ============================================================
+function handleMove(dr, dc) {
+  if (state.phase !== 'running') return;
+  ensureAudio();
+
+  const nr = state.currentPos.r + dr;
+  const nc = state.currentPos.c + dc;
+  const ts = ((performance.now() - state.startTime)/1000).toFixed(2);
+  state.totalMoves++;
+
+  if (nr<0||nr>=GRID||nc<0||nc>=GRID) {
+    state.errorCount++;
+    state.lastWasError = true;
+    state.eventLog.push({type:'error',time:ts,from:{...state.currentPos},attempted:{r:nr,c:nc},reason:'boundary'});
+    if (state.condition === 3) {
+      playNoise(0.35);
+      setTimeout(()=>playNodeSound(state.currentPos.r,state.currentPos.c),400);
+      addLog('error',`[${ts}s] 边界错误 → 强噪声信号`);
+    } else {
+      playClick();
+      addLog('error',`[${ts}s] 边界错误（无差异反馈）`);
+    }
+    flashCell(state.currentPos.r,state.currentPos.c,'error-flash');
+    updateMetrics();
+    return;
+  }
+
+  const prevPos = {...state.currentPos};
+  const nextTarget = state.path[state.pathIdx + 1];
+  const isNextOnPath = nextTarget && nextTarget.r===nr && nextTarget.c===nc;
+  const targetPathIndex = findNodeInPath(nr, nc);
+  const isBackOnPath = targetPathIndex >= 0 && targetPathIndex <= state.pathIdx;
+
+  if (isNextOnPath) {
+    if (state.lastWasError || !state.onPath) {
+      state.corrections++;
+      state.eventLog.push({type:'correction',time:ts,pos:{r:nr,c:nc}});
+      if (state.condition === 3) {
+        playCorrectionConfirm(nr, nc);
+        addLog('correct',`[${ts}s] 纠正成功 → (${nr},${nc}) — 确认音`);
+      } else {
+        addLog('correct',`[${ts}s] 纠正成功 → (${nr},${nc})`);
+      }
+    }
+    state.lastWasError = false;
+    state.onPath = true;
+    state.currentPos = {r:nr,c:nc};
+    state.pathIdx++;
+    state.visitedCells.add(`${nr},${nc}`);
+    state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:true});
+
+    if (state.condition === 3) playTransitionCue(nr, nc);
+    else if (state.condition === 2) { playClick(0.06); setTimeout(()=>playNodeSound(nr,nc),80); }
+    else { playClick(0.06); setTimeout(()=>playTone(261.63,0.5,'sine',0.3),80); }
+
+    flashCell(nr,nc,'correct-flash');
+    addLog('move',`[${ts}s] 前进 → (${nr},${nc}) ✓ [步${state.pathIdx}/${state.path.length-1}]`);
+
+    if (state.pathIdx === state.path.length-1) setTimeout(()=>endTask(),600);
+
+  } else if (isBackOnPath) {
+    state.currentPos = {r:nr,c:nc};
+    state.visitedCells.add(`${nr},${nc}`);
+    state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:false,backtrack:true});
+
+    if (state.condition === 3) playTransitionCue(nr, nc);
+    else if (state.condition === 2) { playClick(0.06); setTimeout(()=>playNodeSound(nr,nc),80); }
+    else { playClick(0.06); setTimeout(()=>playTone(261.63,0.5,'sine',0.3),80); }
+
+    addLog('info',`[${ts}s] 回退 → (${nr},${nc}) 路径节点 — 无误差`);
+
+  } else {
+    state.errorCount++;
+    state.lastWasError = true;
+    state.onPath = false;
+    state.currentPos = {r:nr,c:nc};
+    state.visitedCells.add(`${nr},${nc}`);
+    state.eventLog.push({type:'error',time:ts,from:prevPos,to:{r:nr,c:nc},reason:'off-path'});
+
+    if (state.condition === 3) {
+      playNoise(0.35);
+      setTimeout(()=>playNodeSound(nr,nc),400);
+      addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc}) — 强噪声信号`);
+    } else if (state.condition === 2) {
+      playClick(0.06);
+      setTimeout(()=>playNodeSound(nr,nc),80);
+      addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc})（无误差信号）`);
+    } else {
+      playClick(0.06);
+      setTimeout(()=>playTone(261.63,0.5,'sine',0.3),80);
+      addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc})（无差异反馈）`);
+    }
+    flashCell(nr,nc,'error-flash');
+  }
+
+  document.getElementById('posDisplay').textContent = `(${state.currentPos.r},${state.currentPos.c})`;
+  document.getElementById('stepDisplay').textContent = `${state.pathIdx} / ${state.path.length-1}`;
+  updateMetrics(); refreshGrid();
+}
+
+function updateMetrics() {
+  document.getElementById('metricTotal').textContent = state.totalMoves;
+  document.getElementById('metricErrors').textContent = state.errorCount;
+  const er = state.totalMoves>0?(state.errorCount/state.totalMoves*100):0;
+  const erEl = document.getElementById('metricErrorRate');
+  erEl.textContent = er.toFixed(1)+'%';
+  erEl.className = 'm-value '+(er<15?'good':er<35?'warn':'bad');
+  document.getElementById('metricCorrections').textContent = state.corrections;
+  const crEl = document.getElementById('metricCorrRate');
+  if (state.errorCount>0) {
+    const cr = state.corrections/state.errorCount*100;
+    crEl.textContent = cr.toFixed(1)+'%';
+    crEl.className = 'm-value '+(cr>50?'good':cr>25?'warn':'bad');
+  } else { crEl.textContent = '--'; crEl.className = 'm-value'; }
+}
+
+function addLog(type, msg) {
+  const box = document.getElementById('logBox');
+  const now = new Date().toLocaleTimeString('en-US',{hour12:false});
+  const e = document.createElement('div');
+  e.className = `log-entry ${type}`;
+  e.innerHTML = `<span class="time">[${now}]</span> <span class="msg">${msg}</span>`;
+  box.appendChild(e); box.scrollTop = box.scrollHeight;
+}
+
+document.addEventListener('keydown', (e) => {
+  // 输入框聚焦时不拦截
+  if (e.target.tagName === 'INPUT') return;
+
+  const km = {
+    'ArrowUp':{dr:-1,dc:0,id:'keyUp'},'ArrowDown':{dr:1,dc:0,id:'keyDown'},
+    'ArrowLeft':{dr:0,dc:-1,id:'keyLeft'},'ArrowRight':{dr:0,dc:1,id:'keyRight'}
+  };
+  if (km[e.key]) {
+    e.preventDefault();
+    const {dr,dc,id}=km[e.key];
+    const el=document.getElementById(id);
+    el.classList.add('pressed'); setTimeout(()=>el.classList.remove('pressed'),150);
+    handleMove(dr,dc);
+  }
+  if (e.key===' ' && state.phase==='running' && state.currentPos) {
+    e.preventDefault();
+    playNodeSound(state.currentPos.r,state.currentPos.c);
+    addLog('info','重播当前节点音');
+  }
+  if (e.key==='Escape' && state.phase==='preview') {
+    previewAbort = true;
+    addLog('system','ESC — 中断旋律预听');
+  }
+});
+
+// ============================================================
+//  NASA-TLX
+// ============================================================
+function updateTlxVal(el, key) {
+  document.getElementById('score_'+key).textContent = el.value;
+}
+
+function submitTLX() {
+  const dims = ['mental','physical','temporal','performance','effort','frustration'];
+  const sc = {}; let tot = 0;
+  dims.forEach(d => { sc[d] = parseInt(document.getElementById('tlx_'+d).value); tot += sc[d]; });
+  sc.mean = parseFloat((tot / dims.length).toFixed(2));
+
+  if (state.currentTrial) {
+    state.currentTrial.tlx = sc;
+    addLog('system', `NASA-TLX 已提交 — 平均负荷 ${sc.mean}`);
+    autoSaveTrialWithTLX(state.currentTrial);
+  }
+  document.getElementById('tlxModal').classList.remove('show');
+}
+
+function skipTLX() {
+  if (state.currentTrial) {
+    state.currentTrial.tlx = { skipped: true };
+    addLog('system', 'NASA-TLX 评估已跳过');
+  }
+  document.getElementById('tlxModal').classList.remove('show');
+}
+
+// ============================================================
+//  数据导出（全部历史）
+// ============================================================
+function exportData() {
+  const d = {
+    exportTime: new Date().toISOString(),
+    subjectId: document.getElementById('subjectId').value || 'P00',
+    totalTrials: state.allTrials.length,
+    trials: state.allTrials
+  };
+  const blob = new Blob([JSON.stringify(d,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  const sid = (document.getElementById('subjectId').value || 'P00').trim();
+  a.download = `${sid}-AllTrials-${formatTimestamp(new Date())}.json`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  addLog('save', `💾 全部历史数据已导出 (${state.allTrials.length} 个试次)`);
+}
+
+// ============================================================
+//  时钟 & 初始化
+// ============================================================
+function updateClock() {
+  document.getElementById('clockDisplay').textContent =
+    new Date().toLocaleTimeString('en-US',{hour12:false});
+}
+setInterval(updateClock,1000); updateClock();
+buildGrid(); refreshGrid();
+addLog('system','系统初始化完成 v1.3');
+addLog('info','• 条件2/3 任务前播放 3 遍路径旋律预听');
+addLog('info','• 条件3 误差噪声音量已显著增强');
+addLog('info','• 任务完成自动弹出 NASA-TLX 评估');
+addLog('info','• 每次任务完成自动下载数据文件 (C{cond}-{number}-{time}.json)');
+</script>
+</body>
+</html>
