@@ -891,14 +891,43 @@ function onActivate(cur) {
   if (pitchOn && cur) playTone(levelIndex(cur.dataset.lv));
   speak("不对，请继续找", GUIDE_RATE);
 }
+function isoNow(ms) {
+  return new Date(ms || Date.now()).toISOString();
+}
+function persistSession() {
+  if (!session) return;
+  try { localStorage.setItem("ht-session", JSON.stringify(session)); } catch (err) {}
+}
+function snapshotTrial(result, endedAt, perfEnd) {
+  const startedAt = trial.t0 || endedAt;
+  const timeMs = trial.t0_perf != null ? Math.max(0, Math.round(perfEnd - trial.t0_perf)) : Math.max(0, endedAt - startedAt);
+  return {
+    participant_id: session.participant_id,
+    session_id: session.session_id,
+    cond: trial.cond || "",
+    practice: trial.practice ? 1 : 0,
+    tid: trial.tid || "",
+    title: trial.title || "",
+    result: result,
+    success: result === "success" ? 1 : 0,
+    timeout: result === "timeout" ? 1 : 0,
+    started_at: trial.started_at || isoNow(startedAt),
+    ended_at: isoNow(endedAt),
+    t0_ms: startedAt,
+    ended_ms: endedAt,
+    time_ms: timeMs,
+    n_focus: trial.n_focus || 0,
+    n_errors: trial.n_errors || 0,
+    levels: trial.levels || {}
+  };
+}
 function finishTrial(result) {
-  if (!trial) return;
+  if (!trial || trial.phase) return;
   clearTimeout(trialTimer);
-  trial.result = result;
-  trial.time_ms = Date.now() - trial.t0;
-  trial.timeout = result === "timeout" ? 1 : 0;
-  trial.success = result === "success" ? 1 : 0;
-  session.trials.push(trial);
+  const endedAt = Date.now();
+  const rec = snapshotTrial(result, endedAt, performance.now());
+  session.trials.push(rec);
+  persistSession();
   ready = false;
   lastId = null;
   trial = null;
@@ -929,6 +958,8 @@ function startTrial() {
   tryMode = "";
   pitchOn = trial.cond === "C1";
   trial.t0 = Date.now();
+  trial.t0_perf = performance.now();
+  trial.started_at = isoNow(trial.t0);
   trial.n_focus = 0;
   trial.n_errors = 0;
   trial.levels = {};
@@ -1066,6 +1097,10 @@ function showIntake() {
         sessionMeta.participant_id = (root.querySelector("#f-pid").value || "").trim();
         sessionMeta.vision = store.vision;
         sessionMeta.sr_exp = store.sr_exp;
+        if (!sessionMeta.participant_id) {
+          speak("请先填写被试编号", GUIDE_RATE);
+          return;
+        }
         startProtocol();
       });
     }
@@ -1109,7 +1144,8 @@ function showSurvey() {
         e.stopPropagation();
         answers.improve = box.value.trim();
         session.survey = answers;
-        session.survey_at = Date.now();
+        session.survey_at = isoNow();
+        persistSession();
         showDone();
       });
     }
@@ -1135,30 +1171,63 @@ function showDone() {
     say: "谢谢，题目和问卷都记下来了。",
     actions: [
       { label: "下载实验记录", run: downloadLog },
-      { label: "再听一遍结束说明", alt: 1, run: function () { speak("谢谢，题目和问卷都记下来了。", GUIDE_RATE); } }
+      { label: "下一被试（刷新页面）", alt: 1, run: function () { location.reload(); } }
     ]
   });
 }
 function downloadLog() {
+  if (!session) return;
+  persistSession();
   const pid = session.participant_id || "x";
+  const sid = session.session_id || "s";
   const blob = new Blob([JSON.stringify(session, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "hierarchytone-" + pid + "-" + Date.now() + ".json";
+  a.download = "hierarchytone-" + pid + "-" + sid + ".json";
   a.click();
   setTimeout(function () {
     const scored = (session.trials || []).filter(function (t) { return !t.phase; });
     const s = session.survey || {};
-    const head = ["pid", "vision", "sr_exp", "cond", "practice", "title", "success", "timeout", "time_s", "n_errors", "n_focus", "pitch_disc", "pitch_layer", "which_better", "effort_c0", "effort_c1", "improve"];
-    const rows = [head.join(",")].concat(scored.map(function (t) {
-      return [pid, session.vision || "", session.sr_exp || "", t.cond || "", t.practice ? 1 : 0, '"' + (t.title || "") + '"', t.success || 0, t.timeout || 0, Math.round((t.time_ms || 0) / 1000), t.n_errors || 0, t.n_focus || 0, s.pitch_disc || "", s.pitch_layer || "", s.which_better || "", s.effort_c0 || "", s.effort_c1 || "", '"' + String(s.improve || "").replace(/"/g, "'") + '"'].join(",");
+    const head = ["pid", "session_id", "vision", "sr_exp", "trial_i", "cond", "practice", "tid", "title", "success", "timeout", "started_at", "ended_at", "time_ms", "time_s", "n_errors", "n_focus", "pitch_disc", "pitch_layer", "which_better", "effort_c0", "effort_c1", "improve"];
+    const rows = [head.join(",")].concat(scored.map(function (t, i) {
+      const ms = t.time_ms || 0;
+      return [
+        csvCell(t.participant_id || pid),
+        csvCell(t.session_id || sid),
+        csvCell(session.vision || ""),
+        csvCell(session.sr_exp || ""),
+        i + 1,
+        csvCell(t.cond || ""),
+        t.practice ? 1 : 0,
+        csvCell(t.tid || ""),
+        csvCell(t.title || ""),
+        t.success || 0,
+        t.timeout || 0,
+        csvCell(t.started_at || ""),
+        csvCell(t.ended_at || ""),
+        ms,
+        (ms / 1000).toFixed(3),
+        t.n_errors || 0,
+        t.n_focus || 0,
+        csvCell(s.pitch_disc || ""),
+        csvCell(s.pitch_layer || ""),
+        csvCell(s.which_better || ""),
+        csvCell(s.effort_c0 || ""),
+        csvCell(s.effort_c1 || ""),
+        csvCell(s.improve || "")
+      ].join(",");
     }));
     const csv = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
     const b = document.createElement("a");
     b.href = URL.createObjectURL(csv);
-    b.download = "hierarchytone-" + pid + "-" + Date.now() + ".csv";
+    b.download = "hierarchytone-" + pid + "-" + sid + ".csv";
     b.click();
   }, 600);
+}
+function csvCell(v) {
+  const s = String(v == null ? "" : v);
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
 }
 function buildTrials() {
   const cart = { tid: "t-cart", title: "找到购物车", say: "请找到底部的购物车，找到以后在上面快速点两下。" };
@@ -1179,6 +1248,8 @@ function buildTrials() {
 function startProtocol() {
   session = {
     t0: Date.now(),
+    started_at: isoNow(),
+    session_id: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
     order: "C0-C1",
     scene: "taobao",
     participant_id: sessionMeta.participant_id,
@@ -1190,6 +1261,7 @@ function startProtocol() {
   };
   trials = buildTrials();
   trialIndex = -1;
+  persistSession();
   nextTrial();
 }
 function nextTut() {
