@@ -2,6 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -65,10 +67,10 @@
 </head>
 <body>
 <div id="stage">
-  <div id="hud">点击屏幕任意位置开始</div>
+  <div id="hud">v3 · 点击屏幕任意位置开始</div>
   <div id="ui"></div>
   <div id="hit"></div>
-  <div id="gate">点击屏幕任意位置开始测试</div>
+  <div id="gate">v3 · 点击屏幕任意位置开始测试<br><span style="display:block;margin-top:16px;font-size:18px;font-weight:500;opacity:.75">先听到“开始”，再单指滑动朗读</span></div>
 </div>
 <script>
 const ITEMS = [
@@ -79,7 +81,9 @@ const ITEMS = [
   ["L5", "商品主图"], ["L3", "连衣裙"], ["L1", "消息中心"], ["L2", "体育频道"]
 ];
 const FREQ = { L1: 523, L2: 392, L3: 294, L4: 220, L5: 165, L6: 123 };
-const SPEECH_RATE = 4;
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let speechRate = IS_IOS ? 2 : 4;
 const ui = document.getElementById("ui");
 const hud = document.getElementById("hud");
 const hit = document.getElementById("hit");
@@ -103,8 +107,10 @@ function pickZhVoice() {
   const prefer = cn.find((v) => /普通话|Mandarin|Tingting|Ting-Ting|Meijia|Xiaoxiao|Huihui/i.test(v.name));
   return prefer || cn[0] || vs.find((v) => /^zh/i.test(v.lang)) || null;
 }
-speechSynthesis.addEventListener("voiceschanged", () => { zhVoice = pickZhVoice(); });
-zhVoice = pickZhVoice();
+if (window.speechSynthesis) {
+  speechSynthesis.addEventListener("voiceschanged", () => { zhVoice = pickZhVoice(); });
+  zhVoice = pickZhVoice();
+}
 
 function isStandalone() {
   return window.navigator.standalone === true ||
@@ -119,18 +125,28 @@ function tryFullscreen() {
   try { req.call(el); } catch (err) {}
 }
 
+function primeSpeech() {
+  if (!window.speechSynthesis) return;
+  try { speechSynthesis.cancel(); } catch (err) {}
+  const warm = new SpeechSynthesisUtterance("。");
+  warm.lang = "zh-CN";
+  warm.volume = 0.01;
+  warm.rate = 1;
+  speechSynthesis.speak(warm);
+}
+
 function unlock() {
   if (armed) return;
   ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state === "suspended") ctx.resume();
   armed = true;
   zhVoice = pickZhVoice();
+  primeSpeech();
   tryFullscreen();
   gate.remove();
   beep(440, 0.12);
-  const extra = isStandalone() ? "" : "若碰到顶部工具栏，请用分享、添加到主屏幕，再从桌面打开。";
-  speak("开始测试。单指滑动朗读。双指滑动翻页。" + extra);
-  hud.innerHTML = "单指滑动朗读 · 双指滑动翻页 · 快按两下选中";
+  speak("开始。单指滑动朗读。双指滑动翻页。");
+  hud.innerHTML = "单指滑动朗读 · 双指滑动翻页 · 快按两下选中 · 语速 " + speechRate + "x";
 }
 
 function beep(freq, dur) {
@@ -146,12 +162,26 @@ function beep(freq, dur) {
 }
 
 function speak(text) {
-  speechSynthesis.cancel();
+  if (!window.speechSynthesis || !text) return;
+  try { speechSynthesis.cancel(); } catch (err) {}
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "zh-CN";
-  u.rate = SPEECH_RATE;
-  if (!zhVoice) zhVoice = pickZhVoice();
-  if (zhVoice) u.voice = zhVoice;
+  u.rate = speechRate;
+  u.pitch = 1;
+  u.volume = 1;
+  if (!IS_IOS) {
+    if (!zhVoice) zhVoice = pickZhVoice();
+    if (zhVoice) u.voice = zhVoice;
+  }
+  u.onerror = function () {
+    if (speechRate > 1) {
+      speechRate = 1;
+      const again = new SpeechSynthesisUtterance(text);
+      again.lang = "zh-CN";
+      again.rate = 1;
+      speechSynthesis.speak(again);
+    }
+  };
   speechSynthesis.speak(u);
 }
 
@@ -168,7 +198,6 @@ function explore(t) {
   if (!cell) {
     lastId = null;
     hud.innerHTML = "离开元素";
-    speechSynthesis.cancel();
     return;
   }
   cell.classList.add("on");
@@ -176,9 +205,7 @@ function explore(t) {
   if (cell.dataset.id === lastId) return;
   lastId = cell.dataset.id;
   beep(FREQ[cell.dataset.lv] || 300, 0.18);
-  setTimeout(() => {
-    if (lastId === cell.dataset.id) speak(cell.dataset.lv + "，" + cell.dataset.sp);
-  }, 160);
+  speak(cell.dataset.lv + "，" + cell.dataset.sp);
 }
 
 function midpointY(touches) {
@@ -188,15 +215,15 @@ function midpointY(touches) {
 }
 
 function onTouchStart(e) {
-  e.preventDefault();
   if (!armed) {
     unlock();
-    if (e.touches.length === 1) explore(e.touches[0]);
+    e.preventDefault();
     return;
   }
+  e.preventDefault();
   if (e.touches.length >= 2) {
     panY = midpointY(e.touches);
-    speechSynthesis.cancel();
+    try { speechSynthesis.cancel(); } catch (err) {}
     return;
   }
   const now = Date.now();
