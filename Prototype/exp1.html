@@ -452,7 +452,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.15</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.17</span>
   <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
@@ -598,10 +598,7 @@
   </div>
 </div>
 
-<audio id="tonePlayerA" playsinline webkit-playsinline></audio>
-<audio id="tonePlayerB" playsinline webkit-playsinline></audio>
-<audio id="tonePlayerC" playsinline webkit-playsinline></audio>
-<audio id="tonePlayerD" playsinline webkit-playsinline></audio>
+<audio id="toneUnlock" playsinline webkit-playsinline></audio>
 <script>
 // ============================================================
 //  全局
@@ -868,112 +865,20 @@ function getRandomPath() {
 }
 
 // ============================================================
-//  发声：每个音播完自己淡出，移动时不掐上一个，避免刺啦
+//  发声：同一时间只响一个格子音（Web Audio），快移不叠音
 // ============================================================
-let toneUrls = [];
-let toneFlip = 0;
+let activeVoices = [];
+let pendingToneTimer = 0;
+let noiseFollowTimer = 0;
 
 function setAudioStatus(text) {
   const el = document.getElementById('audioStatus');
   if (el) el.textContent = text;
 }
 
-function tonePlayers() {
-  return [
-    document.getElementById('tonePlayerA'),
-    document.getElementById('tonePlayerB'),
-    document.getElementById('tonePlayerC'),
-    document.getElementById('tonePlayerD')
-  ].filter(Boolean);
-}
-
-function nextFreePlayer() {
-  const els = tonePlayers();
-  for (let i = 0; i < els.length; i++) {
-    const el = els[(toneFlip + i) % els.length];
-    if (el.paused || el.ended || el.currentTime === 0) {
-      toneFlip = (toneFlip + i + 1) % els.length;
-      return el;
-    }
-  }
-  const extra = new Audio();
-  extra.setAttribute('playsinline', '');
-  extra.setAttribute('webkit-playsinline', '');
-  return extra;
-}
-
-function makeWavBlob(freq, durSec, peak) {
-  const sr = 44100;
-  const n = Math.max(4410, Math.floor(sr * durSec));
-  const dataSize = n * 2;
-  const buf = new ArrayBuffer(44 + dataSize);
-  const v = new DataView(buf);
-  function wstr(off, s) {
-    for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
-  }
-  wstr(0, 'RIFF');
-  v.setUint32(4, 36 + dataSize, true);
-  wstr(8, 'WAVE');
-  wstr(12, 'fmt ');
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true);
-  v.setUint16(22, 1, true);
-  v.setUint32(24, sr, true);
-  v.setUint32(28, sr * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  wstr(36, 'data');
-  v.setUint32(40, dataSize, true);
-  const fadeIn = Math.min(1323, Math.floor(n / 6));
-  const fadeOut = Math.min(4410, Math.floor(n / 2.5));
-  for (let i = 0; i < n; i++) {
-    let env = 1;
-    if (i < fadeIn) env = 0.5 - 0.5 * Math.cos(Math.PI * i / fadeIn);
-    else if (i > n - fadeOut) env = 0.5 - 0.5 * Math.cos(Math.PI * (n - i) / fadeOut);
-    const s = env * peak * Math.sin(2 * Math.PI * freq * i / sr);
-    v.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, s)) * 32767), true);
-  }
-  return new Blob([buf], { type: 'audio/wav' });
-}
-
-function makeNoiseBlob(durSec, peak) {
-  const sr = 44100;
-  const n = Math.max(1, Math.floor(sr * durSec));
-  const dataSize = n * 2;
-  const buf = new ArrayBuffer(44 + dataSize);
-  const v = new DataView(buf);
-  function wstr(off, s) {
-    for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
-  }
-  wstr(0, 'RIFF');
-  v.setUint32(4, 36 + dataSize, true);
-  wstr(8, 'WAVE');
-  wstr(12, 'fmt ');
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true);
-  v.setUint16(22, 1, true);
-  v.setUint32(24, sr, true);
-  v.setUint32(28, sr * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  wstr(36, 'data');
-  v.setUint32(40, dataSize, true);
-  const fade = Math.min(1323, Math.floor(n / 5));
-  for (let i = 0; i < n; i++) {
-    let env = 1;
-    if (i < fade) env = 0.5 - 0.5 * Math.cos(Math.PI * i / fade);
-    else if (i > n - fade) env = 0.5 - 0.5 * Math.cos(Math.PI * (n - i) / fade);
-    v.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, env * peak * (Math.random() * 2 - 1))) * 32767), true);
-  }
-  return new Blob([buf], { type: 'audio/wav' });
-}
-
-function rememberUrl(url) {
-  toneUrls.push(url);
-  while (toneUrls.length > 8) {
-    const old = toneUrls.shift();
-    try { URL.revokeObjectURL(old); } catch (err) {}
-  }
+function clearPendingTones() {
+  if (pendingToneTimer) { clearTimeout(pendingToneTimer); pendingToneTimer = 0; }
+  if (noiseFollowTimer) { clearTimeout(noiseFollowTimer); noiseFollowTimer = 0; }
 }
 
 function unlockAudioSync() {
@@ -981,11 +886,10 @@ function unlockAudioSync() {
     if (navigator.audioSession) navigator.audioSession.type = 'playback';
   } catch (err) {}
   const AC = window.AudioContext || window.webkitAudioContext;
-  if (AC) {
-    if (!audioCtx) audioCtx = new AC();
-    if (audioCtx.state === 'suspended') {
-      try { audioCtx.resume(); } catch (err) {}
-    }
+  if (!AC) return;
+  if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === 'suspended') {
+    try { audioCtx.resume(); } catch (err) {}
   }
 }
 
@@ -993,36 +897,92 @@ function ensureAudio() {
   unlockAudioSync();
 }
 
-function playTone(freq, dur, type, vol) {
-  if (dur == null) dur = 0.32;
-  if (vol == null) vol = 0.48;
-  if (!isFinite(freq) || freq <= 0) return;
+function stopVoices(fadeSec) {
+  fadeSec = fadeSec == null ? 0.03 : fadeSec;
+  const c = audioCtx;
+  if (!c) { activeVoices = []; return; }
+  const t = c.currentTime;
+  activeVoices.forEach(function (v) {
+    try {
+      v.gain.gain.cancelScheduledValues(t);
+      const cur = Math.max(v.gain.gain.value, 0.0001);
+      v.gain.gain.setValueAtTime(cur, t);
+      v.gain.gain.linearRampToValueAtTime(0.0001, t + fadeSec);
+      v.source.stop(t + fadeSec + 0.01);
+    } catch (err) {}
+  });
+  activeVoices = [];
+}
+
+function fillToneBuffer(buf, freq, peak) {
+  const data = buf.getChannelData(0);
+  const n = data.length;
+  const sr = buf.sampleRate;
+  const fadeIn = Math.min(Math.floor(sr * 0.012), Math.floor(n / 8));
+  const fadeOut = Math.min(Math.floor(sr * 0.08), Math.floor(n / 3));
+  for (let i = 0; i < n; i++) {
+    let env = 1;
+    if (i < fadeIn) env = i / fadeIn;
+    else if (i > n - fadeOut) env = Math.max(0, (n - i) / fadeOut);
+    data[i] = env * peak * Math.sin(2 * Math.PI * freq * i / sr);
+  }
+}
+
+function fillNoiseBuffer(buf, peak) {
+  const data = buf.getChannelData(0);
+  const n = data.length;
+  const fade = Math.min(Math.floor(buf.sampleRate * 0.01), Math.floor(n / 5));
+  for (let i = 0; i < n; i++) {
+    let env = 1;
+    if (i < fade) env = i / fade;
+    else if (i > n - fade) env = Math.max(0, (n - i) / fade);
+    data[i] = env * peak * (Math.random() * 2 - 1);
+  }
+}
+
+function playBuffer(buf, vol, dur) {
   unlockAudioSync();
+  const c = audioCtx;
+  if (!c) return;
+  stopVoices(0.025);
   try {
-    const blob = makeWavBlob(freq, dur, Math.min(0.62, vol));
-    const url = URL.createObjectURL(blob);
-    rememberUrl(url);
-    const player = nextFreePlayer();
-    player.volume = 1;
-    player.src = url;
-    const p = player.play();
-    if (p && p.catch) p.catch(function () { setAudioStatus('⚠ 播放被拦截，请再点开始'); });
+    const src = c.createBufferSource();
+    const g = c.createGain();
+    const t0 = c.currentTime;
+    src.buffer = buf;
+    g.gain.setValueAtTime(Math.max(0.0001, vol), t0);
+    g.gain.setValueAtTime(Math.max(0.0001, vol), t0 + Math.max(0.02, dur - 0.06));
+    g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(g);
+    g.connect(c.destination);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
+    activeVoices.push({ source: src, gain: g });
   } catch (err) {}
 }
 
-function playNoise(dur) {
-  dur = Number(dur) || 0.28;
+function playTone(freq, dur, type, vol) {
+  if (dur == null) dur = 0.28;
+  if (vol == null) vol = 0.45;
+  if (!isFinite(freq) || freq <= 0) return;
+  clearPendingTones();
   unlockAudioSync();
-  try {
-    const blob = makeNoiseBlob(dur, 0.45);
-    const url = URL.createObjectURL(blob);
-    rememberUrl(url);
-    const player = nextFreePlayer();
-    player.volume = 1;
-    player.src = url;
-    const p = player.play();
-    if (p && p.catch) p.catch(function () {});
-  } catch (err) {}
+  if (!audioCtx) return;
+  const n = Math.max(1, Math.floor(audioCtx.sampleRate * dur));
+  const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+  fillToneBuffer(buf, freq, Math.min(0.7, vol));
+  playBuffer(buf, 1, dur);
+}
+
+function playNoise(dur) {
+  dur = Number(dur) || 0.1;
+  clearPendingTones();
+  unlockAudioSync();
+  if (!audioCtx) return;
+  const n = Math.max(1, Math.floor(audioCtx.sampleRate * dur));
+  const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+  fillNoiseBuffer(buf, 0.55);
+  playBuffer(buf, 1, dur);
 }
 
 function playTransitionCue(nr, nc) {
@@ -1031,14 +991,17 @@ function playTransitionCue(nr, nc) {
 
 function playNodeSound(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq, 0.32, 'sine', 0.48);
+  playTone(freq, 0.28, 'sine', 0.48);
   updateSoundInfo(r, c, freq);
 }
 
 function playCorrectionConfirm(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq * 0.75, 0.18, 'sine', 0.32);
-  setTimeout(function () { playTone(freq, 0.32, 'sine', 0.45); }, 280);
+  playTone(freq * 0.75, 0.12, 'sine', 0.3);
+  pendingToneTimer = setTimeout(function () {
+    pendingToneTimer = 0;
+    playTone(freq, 0.28, 'sine', 0.45);
+  }, 160);
 }
 
 function updateSoundInfo(r, c, freq) {
@@ -1440,6 +1403,7 @@ function maybeFinishSession() {
 // ============================================================
 function handleMove(dr, dc) {
   if (state.phase !== 'running' || !state.currentPos) return;
+  clearPendingTones();
   ensureAudio();
 
   const nr = state.currentPos.r + dr;
@@ -1453,8 +1417,8 @@ function handleMove(dr, dc) {
       state.lastWasError = true;
       state.eventLog.push({type:'error',time:ts,from:{...state.currentPos},attempted:{r:nr,c:nc},reason:'boundary'});
       if (state.condition === 3) {
-        playNoise(0.35);
-        setTimeout(function () { playNodeSound(state.currentPos.r,state.currentPos.c); },400);
+        playNoise(0.1);
+        noiseFollowTimer = setTimeout(function () { playNodeSound(state.currentPos.r,state.currentPos.c); },120);
         addLog('error',`[${ts}s] 边界错误 → 强噪声信号`);
       } else {
         playNodeSound(state.currentPos.r, state.currentPos.c);
@@ -1512,8 +1476,8 @@ function handleMove(dr, dc) {
       state.eventLog.push({type:'error',time:ts,from:prevPos,to:{r:nr,c:nc},reason:'off-path'});
 
       if (state.condition === 3) {
-        playNoise(0.35);
-        setTimeout(function () { playNodeSound(nr,nc); },400);
+        playNoise(0.1);
+        noiseFollowTimer = setTimeout(function () { playNodeSound(nr,nc); },120);
         addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc}) — 强噪声信号`);
       } else {
         playNodeSound(nr,nc);
@@ -1765,7 +1729,7 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.15');
+addLog('system','系统初始化完成 v1.17');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
