@@ -7,8 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#111111">
-<title>HierarchyTone · 开始</title>
+<title>HierarchyTone 探针</title>
 <style>
   html, body {
     margin: 0; height: 100%; width: 100%;
@@ -18,62 +17,55 @@
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
   }
-  #stage { position: fixed; inset: 0; overflow: hidden; }
   #ui {
     position: absolute; inset: 0;
     display: grid; grid-template-columns: 1fr 1fr;
     grid-auto-rows: minmax(22vh, auto);
     gap: 10px;
-    padding: calc(88px + env(safe-area-inset-top)) 12px calc(28px + env(safe-area-inset-bottom));
+    padding: calc(88px + env(safe-area-inset-top)) 12px 24px;
     overflow-y: auto;
     touch-action: none;
   }
   .cell {
     background: #2a2a2e; border-radius: 12px;
     display: flex; flex-direction: column; justify-content: center;
-    min-height: 22vh; padding: 16px; outline: 4px solid transparent;
+    min-height: 22vh; padding: 16px;
   }
-  .cell.on { background: #3b3b90; outline-color: #8ab4ff; }
+  .cell.on { background: #3b3b90; outline: 4px solid #8ab4ff; }
   .cell .lv { font-size: 14px; opacity: .55; }
   .cell .name { font-size: 22px; font-weight: 600; }
   #hud {
-    position: absolute; top: 0; left: 0; right: 0;
+    position: absolute; top: 0; left: 0; right: 0; z-index: 2;
     padding: calc(12px + env(safe-area-inset-top)) 14px 10px;
-    background: #000; font-size: 16px; line-height: 1.45;
-    z-index: 2; pointer-events: none;
+    background: #000; font-size: 16px; pointer-events: none;
   }
   #hud b { color: #8ab4ff; }
-  #hit { position: absolute; inset: 0; z-index: 5; touch-action: none; display: none; }
+  #hit { position: absolute; inset: 0; z-index: 5; display: none; touch-action: none; }
   #gate {
     position: absolute; inset: 0; z-index: 8;
-    width: 100%; height: 100%;
-    border: 0; margin: 0; padding: 32px 24px;
+    width: 100%; height: 100%; border: 0; margin: 0;
     background: #111; color: #fff;
-    font: 700 28px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-    text-align: center;
+    font: 700 28px/1.5 -apple-system, "PingFang SC", sans-serif;
     -webkit-appearance: none; appearance: none;
-    border-radius: 0;
   }
-  #gate small { display: block; margin-top: 16px; font-size: 18px; font-weight: 500; opacity: .75; }
+  #gate small { display: block; margin-top: 14px; font-size: 18px; font-weight: 500; opacity: .7; }
 </style>
 </head>
 <body>
-<div id="stage">
-  <div id="hud">请用 Safari 打开本页</div>
-  <div id="ui"></div>
-  <div id="hit"></div>
-  <button type="button" id="gate">点击屏幕任意位置开始测试<small>必须用 Safari，不要用微信打开</small></button>
-</div>
+<div id="hud">请用 Safari 打开</div>
+<div id="ui"></div>
+<div id="hit"></div>
+<button type="button" id="gate">点击屏幕开始<small>只会读手指底下的那一项</small></button>
 <script>
 const ITEMS = [
-  ["L1", "顶部导航"], ["L1", "搜索框"], ["L2", "频道 · 推荐"], ["L2", "频道 · 热榜"],
+  ["L1", "顶部导航"], ["L1", "搜索框"], ["L2", "频道推荐"], ["L2", "频道热榜"],
   ["L3", "新闻卡片甲"], ["L3", "新闻卡片乙"], ["L4", "标题文字"], ["L5", "配图"],
-  ["L3", "商品卡片"], ["L4", "价格 59 元"], ["L2", "底部标签栏"], ["L1", "购物车"],
-  ["L2", "限时秒杀"], ["L3", "耳机 59 元"], ["L3", "水杯 29 元"], ["L4", "猜你喜欢"],
+  ["L3", "商品卡片"], ["L4", "价格五十九元"], ["L2", "底部标签栏"], ["L1", "购物车"],
+  ["L2", "限时秒杀"], ["L3", "耳机五十九元"], ["L3", "水杯二十九元"], ["L4", "猜你喜欢"],
   ["L5", "商品主图"], ["L3", "连衣裙"], ["L1", "消息中心"], ["L2", "体育频道"]
 ];
-const FREQ = { L1: 523, L2: 392, L3: 294, L4: 220, L5: 165, L6: 123 };
-const IS_WECHAT = /MicroMessenger|DingTalk|QQ\//i.test(navigator.userAgent);
+const FREQ = { L1: 523, L2: 392, L3: 294, L4: 220, L5: 165 };
+const RATE = 2;
 const ui = document.getElementById("ui");
 const hud = document.getElementById("hud");
 const hit = document.getElementById("hit");
@@ -85,38 +77,45 @@ ITEMS.forEach(([lv, name], i) => {
   el.dataset.lv = lv;
   el.dataset.sp = name;
   el.dataset.id = "n" + i;
-  el.innerHTML = '<span class="lv">' + lv + '</span><span class="name">' + name + "</span>";
+  el.innerHTML = '<span class="lv">' + lv + "</span><span class=\"name\">" + name + "</span>";
   ui.appendChild(el);
 });
 
-if (IS_WECHAT) {
-  gate.innerHTML = "请点右上角 ···<small>用 Safari 打开，微信里没有声音</small>";
+let ctx = null, voice = null, lastId = null, lastTap = 0, armed = false, panY = null;
+
+function pickMandarin() {
+  const vs = speechSynthesis.getVoices() || [];
+  const cn = vs.filter((v) => {
+    const lang = (v.lang || "").toLowerCase().replace("_", "-");
+    const name = v.name || "";
+    if (/zh-tw|zh-hk|cantonese|sinji|meijia|台灣|粤|廣東/i.test(lang + name)) return false;
+    return lang === "zh-cn" || /中国|普通话|ting-?ting|hanhan|nana|lilian|xiaoxiao/i.test(name);
+  });
+  return cn.find((v) => /普通话|ting-?ting|hanhan/i.test(v.name)) || cn[0] || null;
 }
 
-let ctx = null, lastId = null, lastTap = 0, armed = false, panY = null;
+function speak(text, rate) {
+  if (!window.speechSynthesis || !text) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "zh-CN";
+  u.rate = rate;
+  u.volume = 1;
+  u.pitch = 1;
+  if (voice) u.voice = voice;
+  speechSynthesis.speak(u);
+}
 
-function beep(freq, dur) {
+function beep(freq) {
   if (!ctx) return;
   const o = ctx.createOscillator();
   const g = ctx.createGain();
   o.frequency.value = freq;
   o.type = "sine";
-  g.gain.setValueAtTime(0.22, ctx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+  g.gain.setValueAtTime(0.18, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
   o.connect(g); g.connect(ctx.destination);
-  o.start(); o.stop(ctx.currentTime + dur);
-}
-
-function speak(text) {
-  if (!window.speechSynthesis || !text) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "zh-CN";
-  u.rate = 1;
-  u.pitch = 1;
-  u.volume = 1;
-  speechSynthesis.speak(u);
-  speechSynthesis.pause();
-  speechSynthesis.resume();
+  o.start(); o.stop(ctx.currentTime + 0.16);
 }
 
 function elementFromTouch(t) {
@@ -132,14 +131,15 @@ function explore(t) {
   if (!cell) {
     lastId = null;
     hud.textContent = "离开元素";
+    speechSynthesis.cancel();
     return;
   }
   cell.classList.add("on");
   hud.innerHTML = "<b>" + cell.dataset.lv + "</b> " + cell.dataset.sp;
   if (cell.dataset.id === lastId) return;
   lastId = cell.dataset.id;
-  beep(FREQ[cell.dataset.lv] || 300, 0.18);
-  speak(cell.dataset.lv + "，" + cell.dataset.sp);
+  beep(FREQ[cell.dataset.lv] || 300);
+  speak(cell.dataset.lv + "，" + cell.dataset.sp, RATE);
 }
 
 function midpointY(touches) {
@@ -152,14 +152,14 @@ function onTouchStart(e) {
   e.preventDefault();
   if (e.touches.length >= 2) {
     panY = midpointY(e.touches);
-    try { speechSynthesis.cancel(); } catch (err) {}
+    speechSynthesis.cancel();
     return;
   }
   const now = Date.now();
   if (now - lastTap < 380 && lastId) {
     const cur = document.querySelector(".cell.on");
-    speak("选中，" + (cur ? cur.dataset.sp : ""));
-    beep(880, 0.1);
+    speak("选中，" + (cur ? cur.dataset.sp : ""), RATE);
+    beep(880);
     lastTap = 0;
     return;
   }
@@ -173,7 +173,6 @@ function onTouchMove(e) {
     const y = midpointY(e.touches);
     if (panY != null) ui.scrollTop += panY - y;
     panY = y;
-    hud.textContent = "双指翻页";
     return;
   }
   panY = null;
@@ -185,33 +184,30 @@ function onTouchEnd(e) {
   if (e.touches.length < 2) panY = null;
 }
 
-function bindExplore() {
-  hit.style.display = "block";
-  [hit, document.body].forEach((el) => {
-    el.addEventListener("touchstart", onTouchStart, { passive: false });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd, { passive: false });
-    el.addEventListener("touchcancel", onTouchEnd, { passive: false });
-  });
-  document.addEventListener("gesturestart", (e) => e.preventDefault());
-}
-
 function unlock() {
-  if (armed || IS_WECHAT) return;
+  if (armed) return;
+  if (/MicroMessenger|DingTalk/i.test(navigator.userAgent)) {
+    gate.innerHTML = "请用 Safari 打开<small>微信里不能朗读</small>";
+    return;
+  }
   armed = true;
+  voice = pickMandarin();
   ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state === "suspended") ctx.resume();
-  if (window.speechSynthesis) {
-    speechSynthesis.speak(new SpeechSynthesisUtterance(""));
-    speechSynthesis.pause();
-    speechSynthesis.resume();
-    speak("开始");
-  }
+  speak("开始", 1);
   gate.remove();
-  bindExplore();
-  hud.textContent = "单指滑动朗读 · 双指滑动翻页 · 快按两下选中";
+  hit.style.display = "block";
+  hit.addEventListener("touchstart", onTouchStart, { passive: false });
+  hit.addEventListener("touchmove", onTouchMove, { passive: false });
+  hit.addEventListener("touchend", onTouchEnd, { passive: false });
+  hit.addEventListener("touchcancel", onTouchEnd, { passive: false });
+  const voiceName = voice ? voice.name : "系统中文";
+  hud.textContent = "普通话 · " + voiceName + " · " + RATE + "倍速 · 单指朗读";
 }
 
+speechSynthesis.addEventListener("voiceschanged", () => {
+  if (!voice) voice = pickMandarin();
+});
 gate.addEventListener("click", unlock);
 </script>
 </body>
