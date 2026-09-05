@@ -65,7 +65,7 @@ const ITEMS = [
   ["L5", "商品主图"], ["L3", "连衣裙"], ["L1", "消息中心"], ["L6", "深层嵌套信息"]
 ];
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
-const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.1, SR = 44100, TONE_VOL = 0.08;
+const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.15;
 const SPEECH_RATE = 4;
 const SPEECH_VOL = 0.8;
 const ui = document.getElementById("ui");
@@ -138,30 +138,34 @@ function levelIndex(lv) {
   return Math.min(5, n - 1);
 }
 
-function genTone(c, lv, vol) {
-  const f = F[lv] || 523;
-  const sr = c.sampleRate;
-  const n = Math.ceil(sr * DUR);
-  const b = c.createBuffer(1, n, sr);
-  const a = b.getChannelData(0);
-  for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    let s = Math.sin(2 * Math.PI * f * t) + 0.12 * Math.sin(2 * Math.PI * f * 2 * t) + 0.04 * Math.sin(2 * Math.PI * f * 3 * t);
-    let e = 1;
-    if (t < ATT) e = t / ATT;
-    else if (t > DUR - REL) e = Math.max(0, (DUR - t) / REL);
-    a[i] = s * vol * e * 0.6;
+function ensureAudio() {
+  if (navigator.audioSession) {
+    try { navigator.audioSession.type = "playback"; } catch (err) {}
   }
-  return b;
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === "suspended") ctx.resume();
+  return ctx;
 }
 
 function playTone(lv) {
-  if (!ctx) return;
-  if (ctx.state === "suspended") ctx.resume();
-  const src = ctx.createBufferSource();
-  src.buffer = genTone(ctx, lv, TONE_VOL);
-  src.connect(ctx.destination);
-  src.start();
+  const c = ensureAudio();
+  if (!c) return;
+  const f = F[lv] || 523.25;
+  const t0 = c.currentTime;
+  [[f, 0.34], [f * 2, 0.04], [f * 3, 0.014]].forEach(function (part) {
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(part[0], t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(part[1], t0 + ATT);
+    g.gain.setValueAtTime(part[1], t0 + DUR - REL);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + DUR);
+    o.connect(g);
+    g.connect(c.destination);
+    o.start(t0);
+    o.stop(t0 + DUR + 0.02);
+  });
 }
 
 function elementFromTouch(t) {
@@ -184,6 +188,7 @@ function explore(t) {
   hud.innerHTML = "<b>" + cell.dataset.lv + "</b> " + cell.dataset.sp;
   if (cell.dataset.id === lastId) return;
   lastId = cell.dataset.id;
+  speechSynthesis.cancel();
   const lv = levelIndex(cell.dataset.lv);
   playTone(lv);
   setTimeout(function () {
@@ -208,8 +213,11 @@ function onTouchStart(e) {
   if (now - lastTap < 380 && lastId) {
     const cur = document.querySelector(".cell.on");
     const lv = cur ? levelIndex(cur.dataset.lv) : 0;
+    speechSynthesis.cancel();
     playTone(lv);
-    speak("选中，" + (cur ? cur.dataset.sp : ""));
+    setTimeout(function () {
+      speak("选中，" + (cur ? cur.dataset.sp : ""));
+    }, (DUR + DLY) * 1000);
     lastTap = 0;
     return;
   }
@@ -242,13 +250,9 @@ function unlock() {
   }
   armed = true;
   mandarinVoice = pickMandarinVoice();
-  try {
-    ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SR });
-  } catch (err) {
-    ctx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (ctx.state === "suspended") ctx.resume();
-  speak("开始");
+  ensureAudio();
+  playTone(0);
+  setTimeout(function () { speak("开始"); }, (DUR + DLY) * 1000);
   gate.remove();
   hit.style.display = "block";
   hit.addEventListener("touchstart", onTouchStart, { passive: false });
