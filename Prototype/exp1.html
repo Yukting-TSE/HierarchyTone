@@ -441,7 +441,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.4</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.5</span>
   <span id="audioStatus">🔊 Web Audio API 就绪</span>
 </div>
 
@@ -457,7 +457,7 @@
         <div class="metric-row"><span class="m-label">纠正事件比例</span><span class="m-value" id="resultCorrRate">--</span></div>
         <div class="metric-row"><span class="m-label">实验条件</span><span class="m-value" id="resultCond">--</span></div>
         <div class="metric-row"><span class="m-label">路径复杂度</span><span class="m-value" id="resultDiff">--</span></div>
-        <div class="metric-row"><span class="m-label">数据已自动保存</span><span class="m-value good" id="resultSaved">--</span></div>
+        <div class="metric-row"><span class="m-label">本场记录</span><span class="m-value good" id="resultSaved">--</span></div>
       </div>
       <div style="font-size:13px; color:#718096; padding:0 16px;">
         即将进入 <strong style="color:#667EEA">NASA-TLX 任务负荷评估</strong>
@@ -571,11 +571,24 @@
     </div>
 
     <div class="tlx-footer">
-      <span class="tip">💡 提交后将自动保存评分到本次任务数据</span>
+      <span class="tip">💡 评分会记入本场，全部题目做完后再一起导出</span>
       <div class="actions">
         <button class="action-btn btn-secondary" style="width:auto;padding:10px 22px;margin:0" onclick="skipTLX()">跳过</button>
         <button class="action-btn btn-primary" style="width:auto;padding:10px 28px" onclick="submitTLX()">提交评分</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="sessionDoneModal">
+  <div class="modal" style="width:440px">
+    <div class="result-summary">
+      <h2>本场题目已记完</h2>
+      <p class="sub" id="sessionDoneText">请导出本场全部数据，再开始下一被试。</p>
+    </div>
+    <div style="padding:16px 32px; background:#F7FAFC; border-top:1px solid #EDF2F7; display:flex; justify-content:center; gap:12px;">
+      <button class="action-btn btn-secondary" style="width:auto;padding:10px 22px" onclick="document.getElementById('sessionDoneModal').classList.remove('show')">稍后导出</button>
+      <button class="action-btn btn-primary" style="width:auto;padding:10px 28px" onclick="exportData()">导出本场全部数据</button>
     </div>
   </div>
 </div>
@@ -612,7 +625,9 @@ let state = {
   participantId: '',
   sessionStartedAt: 0,
   trialStartedAt: 0,
-  trialStartedPerf: 0
+  trialStartedPerf: 0,
+  exported: false,
+  exportPrompted: false
 };
 
 const STORE_CURRENT = 'exp1-current-session';
@@ -662,6 +677,7 @@ function persistSession() {
     session_id: state.sessionId,
     participant_id: state.participantId || getPid(),
     started_at: state.sessionStartedAt ? isoNow(state.sessionStartedAt) : isoNow(),
+    exported: !!state.exported,
     trials: state.allTrials
   };
   try { sessionStorage.setItem(STORE_CURRENT, JSON.stringify(rec)); } catch (err) {}
@@ -694,7 +710,9 @@ function ensureSession() {
 }
 function nextParticipant() {
   persistSession();
-  if (state.allTrials.length) {
+  if (state.allTrials.length && !state.exported) {
+    if (!confirm('本场还没有导出。确定刷新并开始下一被试？数据会留在本机，可用「导出本机全部场次」找回。')) return;
+  } else if (state.allTrials.length) {
     if (!confirm('开始下一被试？本场 ' + (state.participantId || '') + ' 的 ' + state.allTrials.length + ' 个试次会留在本机，页面将刷新。')) return;
   }
   try { sessionStorage.removeItem(STORE_CURRENT); } catch (err) {}
@@ -709,6 +727,8 @@ function restoreSession() {
     state.sessionId = rec.session_id;
     state.participantId = rec.participant_id || '';
     state.allTrials = rec.trials;
+    state.exported = !!rec.exported;
+    state.exportPrompted = false;
     state.trialCounter = { 1: 0, 2: 0, 3: 0 };
     rec.trials.forEach(function (t) {
       const c = t.condition;
@@ -1161,9 +1181,7 @@ function endTask() {
   persistSession();
 
   addLog('system', `任务完成！用时 ${(trial.time).toFixed(1)}s · 错误率 ${(trial.errorRate*100).toFixed(1)}%`);
-
-  const filename = autoSaveTrial(trial);
-  trial._savedFilename = filename;
+  addLog('save', '已记入本场第 ' + state.allTrials.length + ' 题，整场结束后再导出');
 
   document.getElementById('resultTime').textContent = trial.time.toFixed(1);
   document.getElementById('resultErrorRate').textContent = (trial.errorRate*100).toFixed(1)+'%';
@@ -1171,7 +1189,7 @@ function endTask() {
     ? (trial.correctionRate*100).toFixed(1)+'%' : 'N/A';
   document.getElementById('resultCond').textContent = `条件${state.condition} (第${trial.trialNumber}次)`;
   document.getElementById('resultDiff').textContent = state.difficulty==='simple'?'简单（6步）':'复杂（10步）';
-  document.getElementById('resultSaved').textContent = '✓ ' + filename;
+  document.getElementById('resultSaved').textContent = '已记入本场 · 共 ' + state.allTrials.length + ' 题';
   document.getElementById('resultModal').classList.add('show');
 
   playTone(523.25,0.15,'sine',0.3);
@@ -1230,20 +1248,25 @@ function formatTimestamp(date) {
   return `${date.getFullYear()}${pad(date.getMonth()+1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
-function trialFilePrefix(trial) {
-  return 'exp1-' + (trial.participant_id || trial.subjectId || 'P00') + '-' + (trial.session_id || 's') + '-C' + trial.condition + '-' + trial.trialNumber;
+function formatTimestamp(date) {
+  const pad = n => String(n).padStart(2,'0');
+  return `${date.getFullYear()}${pad(date.getMonth()+1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
-function autoSaveTrial(trial) {
-  const filename = trialFilePrefix(trial) + '-' + formatTimestamp(new Date()) + '.json';
-  downloadBlob(filename, new Blob([JSON.stringify(trial, null, 2)], { type: 'application/json' }));
-  addLog('save', `💾 已自动保存：${filename}`);
-  return filename;
+function protocolCoverage() {
+  const seen = {};
+  state.allTrials.forEach(function (t) {
+    seen[String(t.condition) + '-' + t.difficulty] = 1;
+  });
+  return Object.keys(seen).length;
 }
-function autoSaveTrialWithTLX(trial) {
-  const filename = trialFilePrefix(trial) + '-' + formatTimestamp(new Date()) + '-with-TLX.json';
-  downloadBlob(filename, new Blob([JSON.stringify(trial, null, 2)], { type: 'application/json' }));
-  addLog('save', `💾 含TLX完整数据已保存：${filename}`);
-  return filename;
+function maybeFinishSession() {
+  if (state.exportPrompted || state.exported) return;
+  if (protocolCoverage() < 6) return;
+  state.exportPrompted = true;
+  persistSession();
+  const el = document.getElementById('sessionDoneText');
+  if (el) el.textContent = '本场已记录 ' + state.allTrials.length + ' 个试次（3 个条件 × 简单/复杂）。请导出全部数据，再开始下一被试。';
+  document.getElementById('sessionDoneModal').classList.add('show');
 }
 
 // ============================================================
@@ -1417,9 +1440,9 @@ function submitTLX() {
     state.currentTrial.tlx_status = 'filled';
     addLog('system', `NASA-TLX 已提交 — 平均负荷 ${sc.mean}`);
     persistSession();
-    autoSaveTrialWithTLX(state.currentTrial);
   }
   document.getElementById('tlxModal').classList.remove('show');
+  maybeFinishSession();
 }
 
 function skipTLX() {
@@ -1430,6 +1453,7 @@ function skipTLX() {
     addLog('system', 'NASA-TLX 评估已跳过');
   }
   document.getElementById('tlxModal').classList.remove('show');
+  maybeFinishSession();
 }
 
 // ============================================================
@@ -1458,6 +1482,10 @@ function exportData() {
   setTimeout(function () {
     downloadBlob(prefix + '-AllTrials-' + stamp + '.csv', new Blob([trialsToCsv(state.allTrials)], { type: 'text/csv;charset=utf-8' }));
   }, 500);
+  state.exported = true;
+  persistSession();
+  const done = document.getElementById('sessionDoneModal');
+  if (done) done.classList.remove('show');
   addLog('save', '本场已导出 JSON + CSV（' + state.allTrials.length + ' 个试次，编号 ' + pid + '）');
 }
 function exportArchive() {
@@ -1503,11 +1531,10 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.4');
+addLog('system','系统初始化完成 v1.5');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
-addLog('info','• 导出本场 CSV 含开始/结束时间和毫秒用时，缺 TLX 也保留空列');
+addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件2/3 任务前播放 3 遍路径旋律预听');
-addLog('info','• 每次任务完成自动下载该试次 JSON，结束时再导出本场 CSV');
 </script>
 </body>
 </html>
