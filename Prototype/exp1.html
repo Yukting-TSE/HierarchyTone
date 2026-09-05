@@ -235,11 +235,22 @@
   }
   .tlx-item-header .title-block { flex: 1; }
   .tlx-item-header .title {
-    font-size: 14px; font-weight: 700; color: #2D3748; margin-bottom: 3px;
+    font-size: 15px; font-weight: 700; color: #2D3748; margin-bottom: 3px;
+  }
+  .tlx-item-header .nasa-name {
+    font-size: 11px; font-weight: 500; color: #A0AEC0; margin-left: 6px;
   }
   .tlx-item-header .desc {
-    font-size: 11px; color: #718096; line-height: 1.5;
+    font-size: 12px; color: #4A5568; line-height: 1.55;
   }
+  .tlx-anchors {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    font-size: 11px; color: #A0AEC0; margin-top: 6px;
+    padding: 0 2px; gap: 8px;
+  }
+  .tlx-anchors .left-anchor { color: #38A169; font-weight: 600; text-align: left; max-width: 38%; }
+  .tlx-anchors .mid-anchor { color: #718096; text-align: center; flex: 1; }
+  .tlx-anchors .right-anchor { color: #E53E3E; font-weight: 600; text-align: right; max-width: 38%; }
   .tlx-item-header .score {
     font-size: 22px; font-weight: 800; color: #667EEA;
     min-width: 50px; text-align: right;
@@ -250,13 +261,6 @@
   .tlx-slider-wrap input[type=range] {
     width: 100%; accent-color: #667EEA; height: 6px;
   }
-  .tlx-anchors {
-    display: flex; justify-content: space-between;
-    font-size: 10px; color: #A0AEC0; margin-top: 4px;
-    padding: 0 2px;
-  }
-  .tlx-anchors .left-anchor { color: #38A169; font-weight: 600; }
-  .tlx-anchors .right-anchor { color: #E53E3E; font-weight: 600; }
 
   .tlx-footer {
     padding: 16px 32px;
@@ -460,7 +464,7 @@
         <div class="metric-row"><span class="m-label">本场记录</span><span class="m-value good" id="resultSaved">--</span></div>
       </div>
       <div style="font-size:13px; color:#718096; padding:0 16px;">
-        即将进入 <strong style="color:#667EEA">NASA-TLX 任务负荷评估</strong>
+        接下来问六句刚才好不好做，请主试念给被试听。
       </div>
     </div>
     <div style="padding:16px 32px; background:#F7FAFC; border-top:1px solid #EDF2F7; display:flex; justify-content:center;">
@@ -474,98 +478,92 @@
   <div class="modal">
     <div class="tlx-header">
       <span class="badge" id="tlxBadge">条件 C1 · 简单路径</span>
-      <h2>📋 NASA-TLX 任务负荷评估</h2>
-      <p>请回想刚才完成任务时的体验，对以下六个维度进行评分（0–100）。<br>请如实评估，没有标准答案。</p>
+      <h2>刚才好不好做</h2>
+      <p>请主试把下面六句话念给被试听。每题按刚才那一题的感觉打分，0 到 100，没有对错。<br>两端写的是具体感觉，不是「高/低」两个字。</p>
     </div>
 
     <div class="tlx-body">
-      <!-- 1. 心理需求 -->
       <div class="tlx-item">
         <div class="tlx-item-header">
           <div class="title-block">
-            <div class="title">① 心理需求 Mental Demand</div>
-            <div class="desc">任务需要多少思考、判断、计算、记忆？任务是简单还是复杂？</div>
+            <div class="title">① 刚才有多费脑子？<span class="nasa-name">心理需求</span></div>
+            <div class="desc">找路的时候，要想、要记、要判断的多不多？几乎不用想就往左，要想很多就往右。</div>
           </div>
           <div class="score" id="score_mental">50</div>
         </div>
         <div class="tlx-slider-wrap">
           <input type="range" min="0" max="100" value="50" id="tlx_mental" oninput="updateTlxVal(this,'mental')">
-          <div class="tlx-anchors"><span class="left-anchor">非常低</span><span>中等</span><span class="right-anchor">非常高</span></div>
+          <div class="tlx-anchors"><span class="left-anchor">几乎不用想</span><span class="mid-anchor">一般</span><span class="right-anchor">要想很多</span></div>
         </div>
       </div>
 
-      <!-- 2. 身体需求 -->
       <div class="tlx-item">
         <div class="tlx-item-header">
           <div class="title-block">
-            <div class="title">② 身体需求 Physical Demand</div>
-            <div class="desc">任务需要多少身体活动？操作是轻松还是费力、紧张？</div>
+            <div class="title">② 手和身体累不累？<span class="nasa-name">身体需求</span></div>
+            <div class="desc">按键、听声音、坐着找路，身体费不费力？不费力就往左，手很累、很紧张就往右。</div>
           </div>
           <div class="score" id="score_physical">20</div>
         </div>
         <div class="tlx-slider-wrap">
           <input type="range" min="0" max="100" value="20" id="tlx_physical" oninput="updateTlxVal(this,'physical')">
-          <div class="tlx-anchors"><span class="left-anchor">非常低</span><span>中等</span><span class="right-anchor">非常高</span></div>
+          <div class="tlx-anchors"><span class="left-anchor">几乎不费力</span><span class="mid-anchor">一般</span><span class="right-anchor">手很累、很紧张</span></div>
         </div>
       </div>
 
-      <!-- 3. 时间压力 -->
       <div class="tlx-item">
         <div class="tlx-item-header">
           <div class="title-block">
-            <div class="title">③ 时间压力 Temporal Demand</div>
-            <div class="desc">完成任务时感受到的时间紧迫程度？节奏从容还是匆忙？</div>
+            <div class="title">③ 觉得时间紧不紧？<span class="nasa-name">时间压力</span></div>
+            <div class="desc">做的时候赶不赶？不赶、可以慢慢想就往左，很赶、来不及就往右。</div>
           </div>
           <div class="score" id="score_temporal">50</div>
         </div>
         <div class="tlx-slider-wrap">
           <input type="range" min="0" max="100" value="50" id="tlx_temporal" oninput="updateTlxVal(this,'temporal')">
-          <div class="tlx-anchors"><span class="left-anchor">非常低</span><span>中等</span><span class="right-anchor">非常高</span></div>
+          <div class="tlx-anchors"><span class="left-anchor">不赶，慢慢来就行</span><span class="mid-anchor">一般</span><span class="right-anchor">很赶，来不及</span></div>
         </div>
       </div>
 
-      <!-- 4. 绩效（反向） -->
       <div class="tlx-item">
         <div class="tlx-item-header">
           <div class="title-block">
-            <div class="title">④ 绩效 Performance</div>
-            <div class="desc">您觉得自己完成任务的成功程度如何？（数值越高表示对自己表现越不满意）</div>
+            <div class="title">④ 觉得自己做得好不好？<span class="nasa-name">绩效（方向相反）</span></div>
+            <div class="desc">这题和其他题相反。觉得做得好，往左打低分；觉得没做好，往右打高分。</div>
           </div>
           <div class="score" id="score_performance">50</div>
         </div>
         <div class="tlx-slider-wrap">
           <input type="range" min="0" max="100" value="50" id="tlx_performance" oninput="updateTlxVal(this,'performance')">
-          <div class="tlx-anchors"><span class="left-anchor">完美</span><span>一般</span><span class="right-anchor">失败</span></div>
+          <div class="tlx-anchors"><span class="left-anchor">觉得做得很好</span><span class="mid-anchor">一般</span><span class="right-anchor">觉得没做好</span></div>
         </div>
       </div>
 
-      <!-- 5. 努力程度 -->
       <div class="tlx-item">
         <div class="tlx-item-header">
           <div class="title-block">
-            <div class="title">⑤ 努力程度 Effort</div>
-            <div class="desc">为达到目前的表现水平，您付出了多少努力（脑力 + 体力）？</div>
+            <div class="title">⑤ 为了做完，使了多大劲？<span class="nasa-name">努力程度</span></div>
+            <div class="desc">脑子和手上加起来，用了多少力气才走到终点？不怎么费劲就往左，使了很大劲就往右。</div>
           </div>
           <div class="score" id="score_effort">50</div>
         </div>
         <div class="tlx-slider-wrap">
           <input type="range" min="0" max="100" value="50" id="tlx_effort" oninput="updateTlxVal(this,'effort')">
-          <div class="tlx-anchors"><span class="left-anchor">非常低</span><span>中等</span><span class="right-anchor">非常高</span></div>
+          <div class="tlx-anchors"><span class="left-anchor">不怎么费劲</span><span class="mid-anchor">一般</span><span class="right-anchor">使了很大劲</span></div>
         </div>
       </div>
 
-      <!-- 6. 挫败感 -->
       <div class="tlx-item">
         <div class="tlx-item-header">
           <div class="title-block">
-            <div class="title">⑥ 挫败感 Frustration</div>
-            <div class="desc">您在任务过程中感到多少烦躁、沮丧、紧张？反之则放松、满足、自信。</div>
+            <div class="title">⑥ 刚才烦不烦、急不急？<span class="nasa-name">挫败感</span></div>
+            <div class="desc">做的时候是放松，还是着急、沮丧、想放弃？放松就往左，很烦、很沮丧就往右。</div>
           </div>
           <div class="score" id="score_frustration">50</div>
         </div>
         <div class="tlx-slider-wrap">
           <input type="range" min="0" max="100" value="50" id="tlx_frustration" oninput="updateTlxVal(this,'frustration')">
-          <div class="tlx-anchors"><span class="left-anchor">非常低</span><span>中等</span><span class="right-anchor">非常高</span></div>
+          <div class="tlx-anchors"><span class="left-anchor">很放松</span><span class="mid-anchor">一般</span><span class="right-anchor">很烦、很沮丧</span></div>
         </div>
       </div>
     </div>
