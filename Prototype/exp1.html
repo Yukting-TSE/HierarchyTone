@@ -447,7 +447,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.10</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.11</span>
   <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
@@ -923,20 +923,6 @@ function playTone(freq, dur, type, vol) {
   liveOsc.push(o);
 }
 
-function playClick(dur) {
-  if (dur == null) dur = 0.08;
-  ensureAudio();
-  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.type = 'square';
-  o.frequency.value = 800;
-  g.gain.setValueAtTime(0.1, audioCtx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-  o.connect(g);
-  g.connect(audioCtx.destination);
-  o.start();
-  o.stop(audioCtx.currentTime + dur);
-}
-
 function playNoise(dur) {
   if (dur == null) dur = 0.35;
   stopAllSounds();
@@ -956,8 +942,7 @@ function playNoise(dur) {
 }
 
 function playTransitionCue(nr, nc) {
-  playClick(0.06);
-  setTimeout(function () { playNodeSound(nr, nc); }, 100);
+  playNodeSound(nr, nc);
 }
 
 function playNodeSound(r, c) {
@@ -1385,7 +1370,7 @@ function handleMove(dr, dc) {
       setTimeout(()=>playNodeSound(state.currentPos.r,state.currentPos.c),400);
       addLog('error',`[${ts}s] 边界错误 → 强噪声信号`);
     } else {
-      playClick();
+      playNodeSound(state.currentPos.r, state.currentPos.c);
       addLog('error',`[${ts}s] 边界错误（无误差信号）`);
     }
     flashCell(state.currentPos.r,state.currentPos.c,'error-flash');
@@ -1418,7 +1403,7 @@ function handleMove(dr, dc) {
     state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:true});
 
     if (state.condition === 3) playTransitionCue(nr, nc);
-    else { playClick(0.06); setTimeout(()=>playNodeSound(nr,nc),80); }
+    else playNodeSound(nr, nc);
 
     flashCell(nr,nc,'correct-flash');
     addLog('move',`[${ts}s] 前进 → (${nr},${nc}) ✓ [步${state.pathIdx}/${state.path.length-1}]`);
@@ -1431,7 +1416,7 @@ function handleMove(dr, dc) {
     state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:false,backtrack:true});
 
     if (state.condition === 3) playTransitionCue(nr, nc);
-    else { playClick(0.06); setTimeout(()=>playNodeSound(nr,nc),80); }
+    else playNodeSound(nr, nc);
 
     addLog('info',`[${ts}s] 回退 → (${nr},${nc}) 路径节点 — 无误差`);
 
@@ -1448,8 +1433,7 @@ function handleMove(dr, dc) {
       setTimeout(()=>playNodeSound(nr,nc),400);
       addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc}) — 强噪声信号`);
     } else {
-      playClick(0.06);
-      setTimeout(()=>playNodeSound(nr,nc),80);
+      playNodeSound(nr,nc);
       addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc})（无误差信号）`);
     }
     flashCell(nr,nc,'error-flash');
@@ -1637,7 +1621,7 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.10');
+addLog('system','系统初始化完成 v1.11');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
