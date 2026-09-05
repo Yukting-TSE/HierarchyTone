@@ -479,7 +479,7 @@
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
 const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.28;
 const LOUD = [1, 1.15, 1.35, 1.6, 1.9, 2.25];
-const SPEECH_RATE = 4, SPEECH_VOL = 0.8, GUIDE_RATE = 1.15;
+const SPEECH_RATE = 4, SPEECH_VOL = 0.42, GUIDE_RATE = 2;
 const page = document.getElementById("page");
 const tabs = document.getElementById("tabs");
 const icons = document.getElementById("icons");
@@ -577,10 +577,10 @@ function playTone(lv) {
   if (c.state === "suspended") c.resume();
   stopTones();
   const i = levelIndex(lv);
-  const f = F[i] || 523.25, t0 = c.currentTime, g0 = 0.22 * (LOUD[i] || 1);
+  const f = F[i] || 523.25, t0 = c.currentTime, g0 = 0.32 * (LOUD[i] || 1);
   [[1, 1], [2, 0.22], [3, 0.1], [4, 0.05]].forEach(function (h) {
     const o = c.createOscillator(), g = c.createGain();
-    const amp = Math.min(0.58, g0 * h[1]);
+    const amp = Math.min(0.7, g0 * h[1]);
     o.type = "sine";
     o.frequency.setValueAtTime(f * h[0], t0);
     g.gain.setValueAtTime(0.0001, t0);
@@ -710,7 +710,7 @@ function playTriple(lv, name, done) {
     setTimeout(function () {
       if (gen !== demoGen) return;
       speak(name, GUIDE_RATE);
-      setTimeout(function () { n += 1; one(); }, 1400);
+      setTimeout(function () { n += 1; one(); }, 900);
     }, (DUR + 0.08) * 1000);
   }
   one();
