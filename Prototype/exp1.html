@@ -448,7 +448,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.7</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.8</span>
   <span id="audioStatus">🔊 请先点「试听音高」</span>
 </div>
 
@@ -860,145 +860,151 @@ function getRandomPath() {
 }
 
 // ============================================================
-//  Web Audio
+//  发声：点击当下立刻播（Web Audio + WAV 双通道）
 // ============================================================
-let masterGain = null;
+const liveAudio = [];
 
 function setAudioStatus(text) {
   const el = document.getElementById('audioStatus');
   if (el) el.textContent = text;
 }
 
-function getAudioCtx() {
-  const AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC) {
-    setAudioStatus('⚠ 浏览器不支持 Web Audio');
-    return null;
+function makeWavBlob(freq, durSec, peak) {
+  const sr = 44100;
+  const n = Math.max(2205, Math.floor(sr * durSec));
+  const dataSize = n * 2;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  function wstr(off, s) {
+    for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
   }
-  if (!audioCtx) {
-    audioCtx = new AC();
-    masterGain = audioCtx.createGain();
-    masterGain.gain.value = 1;
-    masterGain.connect(audioCtx.destination);
+  wstr(0, 'RIFF');
+  v.setUint32(4, 36 + dataSize, true);
+  wstr(8, 'WAVE');
+  wstr(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true);
+  v.setUint32(28, sr * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  wstr(36, 'data');
+  v.setUint32(40, dataSize, true);
+  const fadeIn = Math.min(882, Math.floor(n / 8));
+  const fadeOut = Math.min(1764, Math.floor(n / 4));
+  for (let i = 0; i < n; i++) {
+    let env = 1;
+    if (i < fadeIn) env = i / fadeIn;
+    else if (i > n - fadeOut) env = Math.max(0, (n - i) / fadeOut);
+    const t = i / sr;
+    const s = env * peak * (
+      Math.sin(2 * Math.PI * freq * t) * 0.62 +
+      Math.sin(2 * Math.PI * freq * 2 * t) * 0.38
+    );
+    v.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, s)) * 32767), true);
   }
-  return audioCtx;
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+function playWavTone(freq, dur, peak) {
+  try {
+    const blob = makeWavBlob(freq, dur, peak);
+    const url = URL.createObjectURL(blob);
+    const a = new Audio(url);
+    a.preload = 'auto';
+    a.volume = 1;
+    liveAudio.push(a);
+    while (liveAudio.length > 8) {
+      const old = liveAudio.shift();
+      try { old.pause(); old.src = ''; } catch (err) {}
+    }
+    const p = a.play();
+    if (p && p.catch) {
+      p.catch(function () { setAudioStatus('⚠ 浏览器拦截了声音'); });
+    }
+    a.onended = function () { URL.revokeObjectURL(url); };
+  } catch (err) {
+    setAudioStatus('⚠ 备用发声失败');
+  }
 }
 
 function unlockAudioSync() {
-  const ctx = getAudioCtx();
-  if (!ctx) return;
   try {
-    const n = Math.max(1, Math.floor((ctx.sampleRate || 44100) * 0.02));
-    const buf = ctx.createBuffer(1, n, ctx.sampleRate || 44100);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(masterGain || ctx.destination);
-    src.start(0);
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';
   } catch (err) {}
-  if (ctx.state === 'suspended') {
-    try { ctx.resume(); } catch (err) {}
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) {
+    setAudioStatus('⚠ 浏览器不支持 Web Audio');
+    return;
   }
-  setAudioStatus(ctx.state === 'running' ? '🔊 声音已打开' : '🔊 正在打开声音…');
+  if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === 'suspended') {
+    try { audioCtx.resume(); } catch (err) {}
+  }
+  setAudioStatus(audioCtx.state === 'running' ? '🔊 声音已打开' : '🔊 正在打开声音…');
 }
 
 function ensureAudio() {
   unlockAudioSync();
 }
 
-function afterAudioReady(fn) {
-  const ctx = getAudioCtx();
-  if (!ctx) return;
-  if (ctx.state === 'running') { fn(); return; }
+function playWebAudioTone(freq, dur, vol) {
   unlockAudioSync();
-  ctx.resume().then(function () {
-    setAudioStatus('🔊 声音已打开');
-    fn();
-  }).catch(function () { fn(); });
+  const c = audioCtx;
+  if (!c) return;
+  try {
+    const t0 = c.currentTime;
+    [[1, 1], [2, 0.32], [3, 0.12]].forEach(function (h) {
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq * h[0];
+      g.gain.value = Math.min(0.75, vol * h[1]);
+      o.connect(g);
+      g.connect(c.destination);
+      o.start();
+      o.stop(t0 + dur);
+    });
+  } catch (err) {}
 }
 
 function playTone(freq, dur, type, vol) {
   freq = Number(freq);
   dur = Math.max(0.08, Number(dur) || 0.5);
   vol = Number(vol);
-  if (!isFinite(vol) || vol <= 0) vol = 0.5;
-  if (!isFinite(freq) || freq < 20) freq = 523.25;
-  afterAudioReady(function () {
-    const ctx = audioCtx;
-    if (!ctx) return;
-    try {
-      const t0 = ctx.currentTime;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.linearRampToValueAtTime(vol, t0 + 0.012);
-      g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
-      g.connect(masterGain || ctx.destination);
-
-      const o = ctx.createOscillator();
-      o.type = type || 'sine';
-      o.frequency.setValueAtTime(freq, t0);
-      o.connect(g);
-      o.start(t0);
-      o.stop(t0 + dur + 0.03);
-
-      // 八度泛音：笔记本喇叭在 260Hz 附近几乎不出声，加一倍频后仍是同一个音名
-      const o2 = ctx.createOscillator();
-      o2.type = 'sine';
-      o2.frequency.setValueAtTime(freq * 2, t0);
-      const g2 = ctx.createGain();
-      g2.gain.setValueAtTime(vol * 0.5, t0);
-      g2.gain.linearRampToValueAtTime(0.0001, t0 + dur);
-      o2.connect(g2);
-      g2.connect(masterGain || ctx.destination);
-      o2.start(t0);
-      o2.stop(t0 + dur + 0.03);
-    } catch (err) {
-      setAudioStatus('⚠ 发声失败');
-    }
-  });
+  if (!isFinite(vol) || vol <= 0) vol = 0.55;
+  if (!isFinite(freq) || freq < 20) freq = 880;
+  playWebAudioTone(freq, dur, vol);
+  playWavTone(freq, dur, Math.min(0.95, vol + 0.25));
 }
 
 function playClick(dur) {
   dur = Math.max(0.04, Number(dur) || 0.08);
-  afterAudioReady(function () {
-    const ctx = audioCtx;
-    if (!ctx) return;
-    try {
-      const t0 = ctx.currentTime;
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = 'square';
-      o.frequency.setValueAtTime(880, t0);
-      g.gain.setValueAtTime(0.18, t0);
-      g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
-      o.connect(g);
-      g.connect(masterGain || ctx.destination);
-      o.start(t0);
-      o.stop(t0 + dur + 0.02);
-    } catch (err) {}
-  });
+  playTone(880, dur, 'square', 0.35);
 }
 
 function playNoise(dur) {
   dur = Number(dur) || 0.35;
-  afterAudioReady(function () {
-    const ctx = audioCtx;
-    if (!ctx) return;
+  unlockAudioSync();
+  const c = audioCtx;
+  if (c) {
     try {
-      const sz = Math.max(1, Math.floor(ctx.sampleRate * dur));
-      const buf = ctx.createBuffer(1, sz, ctx.sampleRate);
+      const sz = Math.max(1, Math.floor(c.sampleRate * dur));
+      const buf = c.createBuffer(1, sz, c.sampleRate);
       const d = buf.getChannelData(0);
       for (let i = 0; i < sz; i++) d[i] = (Math.random() * 2 - 1) * 0.95;
-      const s = ctx.createBufferSource();
-      const g = ctx.createGain();
+      const s = c.createBufferSource();
+      const g = c.createGain();
       s.buffer = buf;
-      g.gain.setValueAtTime(0.85, ctx.currentTime);
-      g.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      g.gain.value = 0.85;
       s.connect(g);
-      g.connect(masterGain || ctx.destination);
+      g.connect(c.destination);
       s.start();
-      s.stop(ctx.currentTime + dur);
+      s.stop(c.currentTime + dur);
     } catch (err) {}
-  });
+  }
+  playWavTone(110, dur, 0.55);
 }
 
 function playTransitionCue(nr, nc) {
@@ -1008,21 +1014,29 @@ function playTransitionCue(nr, nc) {
 
 function playNodeSound(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq, 0.55, 'sine', 0.58);
+  playTone(freq, 0.55, 'sine', 0.62);
   updateSoundInfo(r, c, freq);
 }
 
 function playCorrectionConfirm(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq * 0.75, 0.15, 'sine', 0.28);
-  setTimeout(function () { playTone(freq, 0.35, 'sine', 0.5); }, 160);
+  playTone(freq * 0.75, 0.15, 'sine', 0.32);
+  setTimeout(function () { playTone(freq, 0.35, 'sine', 0.55); }, 160);
 }
 
 function testAudio() {
   unlockAudioSync();
-  playTone(523.25, 0.45, 'sine', 0.62);
-  setTimeout(function () { playTone(698.46, 0.45, 'sine', 0.62); }, 480);
-  addLog('system', '试音：C5 → F5。若这两下都听不到，请检查系统音量/耳机，不要静音。');
+  playTone(880, 0.5, 'sine', 0.75);
+  setTimeout(function () { playTone(1174.66, 0.5, 'sine', 0.75); }, 520);
+  try {
+    const u = new SpeechSynthesisUtterance('试音');
+    u.lang = 'zh-CN';
+    u.rate = 1;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  } catch (err) {}
+  setAudioStatus('🔊 已触发试音');
+  addLog('system', '试音已触发：两声高音 + 语音「试音」。必须用 Chrome 或 Edge 打开，不要用 Cursor 内置预览。');
 }
 
 function updateSoundInfo(r, c, freq) {
@@ -1690,7 +1704,7 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.7');
+addLog('system','系统初始化完成 v1.8');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
