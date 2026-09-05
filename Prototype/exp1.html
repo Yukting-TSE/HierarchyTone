@@ -316,7 +316,7 @@
   </div>
   <div class="meta">
     <span>📐 4×4 状态空间</span>
-    <span>🎵 旋律绝对编码</span>
+    <span>🎵 宽间距旋律编码</span>
     <span id="clockDisplay">--:--:--</span>
   </div>
 </div>
@@ -337,15 +337,15 @@
     <div class="panel-section">
       <h3>实验条件</h3>
       <button class="condition-btn active" data-cond="1" onclick="selectCondition(1)">
-        条件一：非结构化 <span class="tag t1">C1</span>
+        条件一：区分性 <span class="tag t1">C1</span>
       </button>
       <button class="condition-btn" data-cond="2" onclick="selectCondition(2)">
-        条件二：仅区分性 <span class="tag t2">C2</span>
+        条件二：区分性+预测性 <span class="tag t2">C2</span>
       </button>
       <button class="condition-btn" data-cond="3" onclick="selectCondition(3)">
         条件三：完全结构化 <span class="tag t3">C3</span>
       </button>
-      <div class="hint-text" id="condDesc">每个格子都是同一个音（C4），走哪都不变。没有预听，走错了也没有噪声。</div>
+      <div class="hint-text" id="condDesc">每个格子音高不同，能靠音高分辨位置。没有预听，走错了没有噪声。</div>
     </div>
 
     <div class="panel-section">
@@ -445,7 +445,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.5</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.6</span>
   <span id="audioStatus">🔊 Web Audio API 就绪</span>
 </div>
 
@@ -750,6 +750,7 @@ function snapshotTrial(endedAt, perfEnd) {
     subjectId: pid,
     session_id: state.sessionId,
     condition: state.condition,
+    conditionName: COND_NAMES[state.condition],
     trialNumber: state.trialCounter[state.condition],
     difficulty: state.difficulty,
     pathLength: Math.max(0, state.path.length - 1),
@@ -771,7 +772,7 @@ function snapshotTrial(endedAt, perfEnd) {
     tlx_status: 'pending'
   };
 }
-const CSV_HEAD = ['participant_id','session_id','condition','trialNumber','difficulty','pathLength','totalMoves','errors','errorRate','corrections','correctionRate','started_at','ended_at','time_ms','time_s','timestamp','tlx_mental','tlx_physical','tlx_temporal','tlx_performance','tlx_effort','tlx_frustration','tlx_mean','tlx_status'];
+const CSV_HEAD = ['participant_id','session_id','condition','conditionName','trialNumber','difficulty','pathLength','totalMoves','errors','errorRate','corrections','correctionRate','started_at','ended_at','time_ms','time_s','timestamp','tlx_mental','tlx_physical','tlx_temporal','tlx_performance','tlx_effort','tlx_frustration','tlx_mean','tlx_status'];
 function trialToCsvRow(t) {
   const tlx = (t.tlx && !t.tlx.skipped) ? t.tlx : {};
   const status = t.tlx_status || (t.tlx && t.tlx.skipped ? 'skipped' : (t.tlx ? 'filled' : 'pending'));
@@ -779,6 +780,7 @@ function trialToCsvRow(t) {
     csvCell(t.participant_id || t.subjectId || ''),
     csvCell(t.session_id || ''),
     t.condition,
+    csvCell(t.conditionName || ''),
     t.trialNumber,
     csvCell(t.difficulty || ''),
     t.pathLength,
@@ -807,19 +809,28 @@ function trialsToCsv(trials) {
 }
 
 // ============================================================
-//  旋律 L3 编码
+//  宽间距旋律编码
 // ============================================================
-const MELODY_ROW = ['C','E','G','A'];
-const ROW_TRANSPOSE = [0, 4, 7, 12];
-const NOTE_SEMITONES = {'C':0,'D':2,'E':4,'F':5,'G':7,'A':9,'B':11};
+const BASE_FREQ_C3 = 130.81;
+const MELODY_COL = ['C', 'F', 'A#', 'D#'];
+const ROW_TRANSPOSE = [0, 7, 14, 21];
+const NOTE_SEMITONES = {
+  'C':0,'C#':1,'D':2,'D#':3,'E':4,'F':5,
+  'F#':6,'G':7,'G#':8,'A':9,'A#':10,'B':11
+};
 
-function calcFreq(st) { return 261.63 * Math.pow(2, st / 12); }
+function calcFreq(semitonesFromC3) {
+  return BASE_FREQ_C3 * Math.pow(2, semitonesFromC3 / 12);
+}
+function getNodeSemitones(r, c) {
+  return NOTE_SEMITONES[MELODY_COL[c]] + ROW_TRANSPOSE[r];
+}
 function getNodeFreq(r, c) {
-  return calcFreq(NOTE_SEMITONES[MELODY_ROW[c]] + ROW_TRANSPOSE[r]);
+  return calcFreq(getNodeSemitones(r, c));
 }
 function getNodeNoteName(r, c) {
-  const semi = NOTE_SEMITONES[MELODY_ROW[c]] + ROW_TRANSPOSE[r];
-  const oct = 4 + Math.floor(semi / 12);
+  const semi = getNodeSemitones(r, c);
+  const oct = 3 + Math.floor(semi / 12);
   const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   return names[semi % 12] + oct;
 }
@@ -894,25 +905,21 @@ function playTransitionCue(nr, nc) {
 }
 
 function playNodeSound(r, c) {
-  if (state.condition === 1) {
-    playTone(261.63, 0.5, 'sine', 0.3);
-  } else {
-    const freq = getNodeFreq(r, c);
-    playTone(freq, 0.5, 'sine', 0.35);
-    updateSoundInfo(r, c, freq);
-  }
+  const freq = getNodeFreq(r, c);
+  playTone(freq, 0.5, 'sine', 0.38);
+  updateSoundInfo(r, c, freq);
 }
 
 function playCorrectionConfirm(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq * 0.8, 0.15, 'sine', 0.2);
-  setTimeout(() => playTone(freq, 0.35, 'sine', 0.35), 160);
+  playTone(freq * 0.75, 0.15, 'sine', 0.22);
+  setTimeout(() => playTone(freq, 0.35, 'sine', 0.38), 160);
 }
 
 function updateSoundInfo(r, c, freq) {
   document.getElementById('metricNote').textContent = getNodeNoteName(r, c);
   document.getElementById('metricFreq').textContent = Math.round(freq) + ' Hz';
-  document.getElementById('metricMelPos').textContent = `行${r+1}·列${c+1} (${MELODY_ROW[c]}+${ROW_TRANSPOSE[r]}st)`;
+  document.getElementById('metricMelPos').textContent = `行${r+1}·列${c+1} (${MELODY_COL[c]}+${ROW_TRANSPOSE[r]}st)`;
 }
 
 // ============================================================
@@ -1053,9 +1060,14 @@ function drawPathArrows() {
 //  条件 & 难度
 // ============================================================
 const COND_DESC = {
-  1: '每个格子都是同一个音（C4），走哪都不变。没有预听，走错了也没有噪声。',
-  2: '每个格子音高不同，能靠音高分辨位置。开始前先听三遍路径。走错了没有噪声。',
+  1: '每个格子音高不同，能靠音高分辨位置。没有预听，走错了没有噪声。',
+  2: '每个格子音高不同。开始前先听三遍路径旋律。走错了没有噪声。',
   3: '每个格子音高不同，开始前听三遍路径。走对了有过渡提示，走错了有噪声，走回路径有确认音。'
+};
+const COND_NAMES = {
+  1: '区分性',
+  2: '区分性+预测性',
+  3: '完全结构化'
 };
 
 function selectCondition(c) {
@@ -1066,7 +1078,7 @@ function selectCondition(c) {
   document.getElementById('condDesc').textContent = COND_DESC[c];
   const tag = document.getElementById('condTagDisplay');
   tag.textContent = 'C'+c; tag.className = 'cond-tag c'+c;
-  addLog('system', `切换至条件${c}`);
+  addLog('system', `切换至条件${c}：${COND_NAMES[c]}`);
 }
 
 function selectDifficulty(d) {
@@ -1120,7 +1132,7 @@ async function startTask() {
   refreshGrid();
   updateMetrics();
 
-  addLog('system', `任务准备 — 条件${state.condition} · ${state.difficulty==='simple'?'简单':'复杂'}路径`);
+  addLog('system', `任务准备 — 条件${state.condition}（${COND_NAMES[state.condition]}）· ${state.difficulty==='simple'?'简单':'复杂'}路径`);
   addLog('info', `起点 (${s.r},${s.c}) → 终点 (${t.r},${t.c})，共 ${state.path.length-1} 步`);
 
   if (state.condition >= 2) {
@@ -1133,7 +1145,7 @@ async function startTask() {
       return;
     }
   } else {
-    addLog('system', '条件一：跳过旋律预听');
+    addLog('system', '条件一：仅区分性，无旋律预听');
   }
 
   state.phase = 'running';
@@ -1141,11 +1153,6 @@ async function startTask() {
   document.getElementById('statusText').textContent = '任务进行中';
 
   playNodeSound(state.currentPos.r, state.currentPos.c);
-  if (state.condition === 1) {
-    document.getElementById('metricNote').textContent = 'C4 (统一)';
-    document.getElementById('metricFreq').textContent = '262 Hz';
-    document.getElementById('metricMelPos').textContent = '--';
-  }
 
   refreshGrid();
 
@@ -1185,7 +1192,7 @@ function endTask() {
   document.getElementById('resultErrorRate').textContent = (trial.errorRate*100).toFixed(1)+'%';
   document.getElementById('resultCorrRate').textContent = trial.correctionRate !== null
     ? (trial.correctionRate*100).toFixed(1)+'%' : 'N/A';
-  document.getElementById('resultCond').textContent = `条件${state.condition} (第${trial.trialNumber}次)`;
+  document.getElementById('resultCond').textContent = `条件${state.condition}：${COND_NAMES[state.condition]} (第${trial.trialNumber}次)`;
   document.getElementById('resultDiff').textContent = state.difficulty==='simple'?'简单（6步）':'复杂（10步）';
   document.getElementById('resultSaved').textContent = '已记入本场 · 共 ' + state.allTrials.length + ' 题';
   document.getElementById('resultModal').classList.add('show');
@@ -1207,20 +1214,23 @@ function proceedToTLX() {
     document.getElementById('score_'+k).textContent = v;
   });
   document.getElementById('tlxBadge').textContent =
-    `条件 C${t.condition} · ${t.difficulty==='simple'?'简单路径':'复杂路径'} · 第 ${t.trialNumber} 次`;
+    `条件 C${t.condition}（${t.conditionName || COND_NAMES[t.condition]}）· ${t.difficulty==='simple'?'简单路径':'复杂路径'} · 第 ${t.trialNumber} 次`;
   const modal = document.getElementById('tlxModal');
   const body = modal.querySelector('.tlx-body');
   modal.classList.add('show');
   function toTop() {
     if (body) body.scrollTop = 0;
-    if (modal) modal.scrollTop = 0;
+    modal.scrollTop = 0;
+    const first = document.getElementById('tlx_mental');
+    if (first) first.focus({ preventScroll: false });
   }
   toTop();
   requestAnimationFrame(function () {
     toTop();
     requestAnimationFrame(toTop);
   });
-  setTimeout(toTop, 0);
+  setTimeout(toTop, 50);
+  setTimeout(toTop, 200);
 }
 
 function resetTask() {
@@ -1301,7 +1311,7 @@ function handleMove(dr, dc) {
       addLog('error',`[${ts}s] 边界错误 → 强噪声信号`);
     } else {
       playClick();
-      addLog('error',`[${ts}s] 边界错误（无差异反馈）`);
+      addLog('error',`[${ts}s] 边界错误（无误差信号）`);
     }
     flashCell(state.currentPos.r,state.currentPos.c,'error-flash');
     updateMetrics();
@@ -1333,8 +1343,7 @@ function handleMove(dr, dc) {
     state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:true});
 
     if (state.condition === 3) playTransitionCue(nr, nc);
-    else if (state.condition === 2) { playClick(0.06); setTimeout(()=>playNodeSound(nr,nc),80); }
-    else { playClick(0.06); setTimeout(()=>playTone(261.63,0.5,'sine',0.3),80); }
+    else { playClick(0.06); setTimeout(()=>playNodeSound(nr,nc),80); }
 
     flashCell(nr,nc,'correct-flash');
     addLog('move',`[${ts}s] 前进 → (${nr},${nc}) ✓ [步${state.pathIdx}/${state.path.length-1}]`);
@@ -1347,8 +1356,7 @@ function handleMove(dr, dc) {
     state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:false,backtrack:true});
 
     if (state.condition === 3) playTransitionCue(nr, nc);
-    else if (state.condition === 2) { playClick(0.06); setTimeout(()=>playNodeSound(nr,nc),80); }
-    else { playClick(0.06); setTimeout(()=>playTone(261.63,0.5,'sine',0.3),80); }
+    else { playClick(0.06); setTimeout(()=>playNodeSound(nr,nc),80); }
 
     addLog('info',`[${ts}s] 回退 → (${nr},${nc}) 路径节点 — 无误差`);
 
@@ -1364,14 +1372,10 @@ function handleMove(dr, dc) {
       playNoise(0.35);
       setTimeout(()=>playNodeSound(nr,nc),400);
       addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc}) — 强噪声信号`);
-    } else if (state.condition === 2) {
+    } else {
       playClick(0.06);
       setTimeout(()=>playNodeSound(nr,nc),80);
       addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc})（无误差信号）`);
-    } else {
-      playClick(0.06);
-      setTimeout(()=>playTone(261.63,0.5,'sine',0.3),80);
-      addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc})（无差异反馈）`);
     }
     flashCell(nr,nc,'error-flash');
   }
@@ -1541,10 +1545,12 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.5');
+addLog('system','系统初始化完成 v1.6');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
-addLog('info','• 条件2/3 任务前播放 3 遍路径旋律预听');
+addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
+addLog('info','• 条件二（区分性+预测性）：唯一音高 + 任务前听三遍路径');
+addLog('info','• 条件三（完全结构化）：唯一音高 + 预听 + 过渡提示 + 误差噪声 + 纠正确认');
 </script>
 </body>
 </html>
