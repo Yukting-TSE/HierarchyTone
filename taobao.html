@@ -533,6 +533,9 @@ const gate = document.getElementById("gate");
 const guide = document.getElementById("guide");
 const taskbar = document.getElementById("taskbar");
 const TRIAL_MS = 90000;
+const ADAPT_MIN_MS = 22000;
+const ADAPT_MIN_ITEMS = 6;
+const PAN_MIN_PX = 110;
 document.querySelectorAll(".sim-el").forEach(function (el, i) { el.dataset.id = "n" + i; });
 icons.addEventListener("scroll", function () {
   const w = icons.clientWidth || 1;
@@ -544,7 +547,7 @@ icons.addEventListener("scroll", function () {
 
 let ctx = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
 let sessionMeta = { participant_id: "", vision: "", sr_exp: "" };
-let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null;
+let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null, tryStarted = 0, panTravel = 0, adaptTimer = 0;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -664,9 +667,13 @@ function explore(t) {
   } else {
     setTimeout(function () { if (lastId === cell.dataset.id) speak(cell.dataset.sp); }, 80);
   }
-  if (tryMode === "explore" || tryMode === "adapt") {
+  if (tryMode === "explore") {
     tutSeen[cell.dataset.id] = 1;
-    if (Object.keys(tutSeen).length >= 3) tutAdvance();
+    if (Object.keys(tutSeen).length >= 3) finishTry("好");
+  }
+  if (tryMode === "adapt") {
+    tutSeen[cell.dataset.id] = 1;
+    maybeFinishAdapt();
   }
 }
 function midpoint(touches) {
@@ -717,9 +724,12 @@ function onTouchMove(e) {
       else if (panAxis === "icons") icons.scrollLeft += dx;
       else if (panAxis === "seckill") seckill.scrollLeft += dx;
       else page.scrollTop += dy;
+      if (tryMode === "pan") {
+        panTravel += Math.abs(dx) + Math.abs(dy);
+        if (panTravel >= PAN_MIN_PX) finishTry("对，这就是翻页");
+      }
     }
     pan = p;
-    if (tryMode === "pan" && Math.abs(page.scrollTop - panMark) > 70) tutAdvance();
     return;
   }
   pan = null; explore(e.changedTouches[0]);
@@ -737,6 +747,27 @@ function tutAdvance() {
   var fn = tryDone || nextTut;
   tryDone = null;
   setTimeout(fn, 450);
+}
+function finishTry(say) {
+  if (tutOnce || demoLock) return;
+  tutOnce = true;
+  clearTimeout(adaptTimer);
+  tryMode = "";
+  ready = false;
+  var fn = tryDone || nextTut;
+  tryDone = null;
+  if (say) {
+    speak(say, GUIDE_RATE);
+    setTimeout(fn, 1600);
+  } else {
+    setTimeout(fn, 450);
+  }
+}
+function maybeFinishAdapt() {
+  if (tryMode !== "adapt" || tutOnce) return;
+  if (Object.keys(tutSeen).length < ADAPT_MIN_ITEMS) return;
+  if (Date.now() - tryStarted < ADAPT_MIN_MS) return;
+  finishTry("好，现在开始题目");
 }
 function playTriple(lv, name, done) {
   var gen = demoGen;
@@ -776,6 +807,7 @@ function bindGuideTap(fn) {
 function hideGuide() {
   demoGen += 1;
   demoLock = false;
+  clearTimeout(adaptTimer);
   speechSynthesis.cancel();
   stopTones();
   guide.classList.remove("show", "dock", "try", "top", "ghost", "form");
@@ -866,9 +898,7 @@ function bindHit() {
 function onActivate(cur) {
   speechSynthesis.cancel();
   if (tryMode === "activate") {
-    speak("对，这就是选中", GUIDE_RATE);
-    tryMode = "";
-    setTimeout(function () { tutAdvance(); }, 900);
+    finishTry("对，这就是选中");
     return;
   }
   if (tryMode === "explore" || tryMode === "adapt" || tryMode === "pan") {
@@ -969,7 +999,7 @@ function startTrial() {
   clearTimeout(trialTimer);
   trialTimer = setTimeout(function () { finishTrial("timeout"); }, TRIAL_MS);
 }
-function beginTry(mode, pitch, then) {
+function beginTry(mode, pitch, then, prompt) {
   hideGuide();
   clearDemo();
   tryDone = then || null;
@@ -977,18 +1007,29 @@ function beginTry(mode, pitch, then) {
   pitchOn = pitch !== false;
   tutOnce = false;
   tutSeen = {};
+  tryStarted = Date.now();
+  panTravel = 0;
   if (mode === "pan") panMark = page.scrollTop;
   bindHit();
   ready = true;
+  if (mode === "adapt") {
+    adaptTimer = setTimeout(function tick() {
+      if (tryMode !== "adapt" || tutOnce) return;
+      maybeFinishAdapt();
+      if (tryMode === "adapt" && !tutOnce) adaptTimer = setTimeout(tick, 400);
+    }, 400);
+  }
+  if (prompt) speak(prompt, GUIDE_RATE);
 }
 function showAdapt(cond, then) {
   const c0 = cond === "C0";
+  const prompt = c0
+    ? "请用一根手指慢慢滑，多滑一会儿，熟悉这个页面。现在只有语音，没有高低音。熟悉好了会自动开始题目。"
+    : "请再用一根手指慢慢滑，多滑一会儿。现在会先听到一声高低音，再听到名称。熟悉好了会自动开始题目。";
   showGuide({
     ghost: 1,
-    say: c0
-      ? "请先用一根手指在屏幕上滑一滑，熟悉位置。现在没有高低音，只有语音。滑过几个不同的地方，就会自动开始题目。点屏幕开始滑。"
-      : "请再滑一滑。现在会先听到一声高低音，再听到名称。滑过几个不同的地方，就会自动开始题目。点屏幕开始滑。",
-    next: function () { beginTry("adapt", !c0, then); }
+    say: (c0 ? "请先熟悉一下页面。" : "请再适应一下高低音。") + "点屏幕开始滑，滑的时间会比刚才久一点。",
+    next: function () { beginTry("adapt", !c0, then, prompt); }
   });
 }
 function nextTrial() {
@@ -1275,9 +1316,13 @@ function runTut() {
       showGuide({
         kicker: "使用说明",
         title: "这是实验用的淘宝首页",
-        body: ["不是真的购物。请戴上耳机。", "接下来每一层都会先连着播三次，每次都是先高低音、再说话。听完三次再讲这一层是干什么的。"],
+        body: [
+          "不是真的购物。请戴上耳机。",
+          "一根手指慢慢滑，用来摸；摸到要选的东西，在那一项上快速点两下，才算选中。两根手指一起滑，用来翻页。",
+          "接下来每一层都会先连着播三次，每次都是先高低音、再说话。听完三次再讲这一层是干什么的。"
+        ],
         hint: "点屏幕任意位置继续",
-        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。接下来每一层都会先连着播三次，每次都是先高低音，再说话。请点屏幕任意位置继续。",
+        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，用来摸。摸到要选的东西，在那一项上快速点两下，才算选中。两根手指一起滑，用来翻页。接下来每一层都会先连着播三次，每次都是先高低音，再说话。请点屏幕任意位置继续。",
         next: tutAdvance
       });
     },
@@ -1369,22 +1414,28 @@ function runTut() {
     function () {
       showGuide({
         ghost: 1,
-        say: "请用一根手指在屏幕上慢慢滑。摸到哪里会先出高低音，再读名称。滑过三个不同的地方，就会自动继续。点屏幕开始滑。",
-        next: function () { beginTry("explore", true, nextTut); }
+        say: "请用一根手指慢慢滑。点屏幕开始滑。",
+        next: function () {
+          beginTry("explore", true, nextTut, "请用一根手指在屏幕上慢慢滑。摸到哪里会先出高低音，再读名称。滑过三个不同的地方，就会自动继续。");
+        }
       });
     },
     function () {
       showGuide({
         ghost: 1,
-        say: "请把手指停在任意一项上，快速点两下。这表示选中。点对了会自动继续。点屏幕开始试。",
-        next: function () { beginTry("activate", true, nextTut); }
+        say: "接下来试选中。摸到以后要快速点两下。点屏幕开始试。",
+        next: function () {
+          beginTry("activate", true, nextTut, "请把手指停在任意一项上，快速点两下。这表示选中。点对了会说话告诉你。");
+        }
       });
     },
     function () {
       showGuide({
         ghost: 1,
-        say: "请用两根手指上下滑，翻一翻页面。翻一下就会请研究助手填写编号。点屏幕开始翻。",
-        next: function () { beginTry("pan", true, nextTut); }
+        say: "接下来试翻页。要用两根手指一起滑。点屏幕开始翻。",
+        next: function () {
+          beginTry("pan", true, nextTut, "请用两根手指一起上下滑，或者左右滑。翻到了会说话告诉你。");
+        }
       });
     }
   ];
