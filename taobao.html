@@ -255,16 +255,36 @@
   #guide .acts button.alt { background: #333; }
   .sim-el.demo { outline-color: #ff5000; z-index: 5; }
   #guide.dock {
-    inset: auto 0 0 0;
+    inset: 0;
     justify-content: flex-end;
+    background: rgba(0,0,0,.12);
+    padding: 0;
+    max-height: none;
+  }
+  #guide.dock.top { justify-content: flex-start; background: rgba(0,0,0,.08); }
+  #guide.try {
+    inset: auto 0 0 0;
     background: rgba(17,17,17,.94);
-    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
-    max-height: 46%;
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    max-height: 42%;
     border-top: 1px solid #333;
   }
-  #guide.dock h2 { font-size: 22px; margin: 0 0 8px; }
-  #guide.dock p { font-size: 17px; line-height: 1.5; margin: 0 0 8px; }
-  #guide.dock .hint { margin-top: 8px; font-size: 15px; }
+  #guide .sheet {
+    width: 100%;
+    background: rgba(17,17,17,.94);
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    border-top: 1px solid #333;
+    pointer-events: none;
+    box-sizing: border-box;
+  }
+  #guide.dock.top .sheet {
+    border-top: 0;
+    border-bottom: 1px solid #333;
+    padding: calc(12px + env(safe-area-inset-top)) 16px 14px;
+  }
+  #guide.dock h2, #guide.try h2 { font-size: 22px; margin: 0 0 8px; }
+  #guide.dock p, #guide.try p { font-size: 17px; line-height: 1.5; margin: 0 0 8px; }
+  #guide.dock .hint, #guide.try .hint { margin-top: 8px; font-size: 15px; }
   #taskbar {
     display: none; position: absolute; left: 0; right: 0; z-index: 7;
     bottom: calc(52px + 44px + env(safe-area-inset-bottom));
@@ -498,9 +518,9 @@
 })();
 
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
-const DUR = 0.24, ATT = 0.04, REL = 0.07, DLY = 0.22;
-const LOUD = [0.14, 0.15, 0.16, 0.17, 0.19, 0.22];
-const SPEECH_RATE = 4, SPEECH_VOL = 0.8, GUIDE_RATE = 1.1;
+const DUR = 0.42, ATT = 0.04, REL = 0.1, DLY = 0.28;
+const LOUD = [0.035, 0.04, 0.048, 0.058, 0.07, 0.085];
+const SPEECH_RATE = 4, SPEECH_VOL = 1, GUIDE_RATE = 1;
 const page = document.getElementById("page");
 const tabs = document.getElementById("tabs");
 const icons = document.getElementById("icons");
@@ -520,7 +540,7 @@ icons.addEventListener("scroll", function () {
 });
 
 let ctx = null, master = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
-let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0;
+let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -566,11 +586,11 @@ function ensureAudio() {
   if (ctx.state === "suspended") ctx.resume();
   if (!master) {
     master = ctx.createGain();
-    master.gain.value = 0.5;
+    master.gain.value = 0.16;
     const lp = ctx.createBiquadFilter();
     lp.type = "lowpass";
-    lp.frequency.value = 1200;
-    lp.Q.value = 0.3;
+    lp.frequency.value = 1800;
+    lp.Q.value = 0.25;
     master.connect(lp);
     lp.connect(ctx.destination);
   }
@@ -596,7 +616,7 @@ function playTone(lv) {
   stopTones();
   const i = levelIndex(lv);
   const f = F[i] || 523.25, t0 = c.currentTime, amp0 = LOUD[i] || 0.16;
-  [[1, 1], [2, 0.08], [3, 0.025]].forEach(function (h) {
+  [[1, 1], [2, i >= 3 ? 0.16 : 0.1], [3, i >= 3 ? 0.06 : 0.03]].forEach(function (h) {
     const o = c.createOscillator(), g = c.createGain();
     const amp = amp0 * h[1];
     o.type = "sine";
@@ -636,6 +656,10 @@ function explore(t) {
     setTimeout(function () { if (lastId === cell.dataset.id) speak(cell.dataset.sp); }, (DUR + DLY) * 1000);
   } else {
     setTimeout(function () { if (lastId === cell.dataset.id) speak(cell.dataset.sp); }, 80);
+  }
+  if (tryMode === "explore") {
+    tutSeen[cell.dataset.id] = 1;
+    if (Object.keys(tutSeen).length >= 3) tutAdvance();
   }
 }
 function midpoint(touches) {
@@ -688,6 +712,7 @@ function onTouchMove(e) {
       else page.scrollTop += dy;
     }
     pan = p;
+    if (tryMode === "pan" && Math.abs(page.scrollTop - panMark) > 70) tutAdvance();
     return;
   }
   pan = null; explore(e.changedTouches[0]);
@@ -699,10 +724,54 @@ function focusTid(el) {
   const p = el.closest("[data-tid]");
   return p ? p.dataset.tid : "";
 }
+function tutAdvance() {
+  if (tutOnce || demoLock) return;
+  tutOnce = true;
+  setTimeout(function () { nextTut(); }, 450);
+}
+function playTriple(lv, name, done) {
+  var gen = demoGen;
+  demoLock = true;
+  var n = 0;
+  function one() {
+    if (gen !== demoGen) return;
+    if (n >= 3) {
+      demoLock = false;
+      if (done) done();
+      return;
+    }
+    stopTones();
+    playTone(lv);
+    setTimeout(function () {
+      if (gen !== demoGen) return;
+      speak(name, 1);
+      setTimeout(function () { n += 1; one(); }, 1300);
+    }, (DUR + 0.12) * 1000);
+  }
+  one();
+}
+function bindGuideTap(fn) {
+  guideHandler = fn || hideGuide;
+  function fire(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (demoLock) return;
+    var now = Date.now();
+    if (now - lastGuideTap < 500) return;
+    lastGuideTap = now;
+    if (guideHandler) guideHandler();
+  }
+  guide.onclick = fire;
+  guide.ontouchend = fire;
+}
 function hideGuide() {
-  guide.classList.remove("show", "dock");
+  demoGen += 1;
+  demoLock = false;
+  speechSynthesis.cancel();
+  stopTones();
+  guide.classList.remove("show", "dock", "try", "top");
   guide.innerHTML = "";
   guide.onclick = null;
+  guide.ontouchend = null;
   guideHandler = null;
 }
 function clearDemo() {
@@ -727,8 +796,13 @@ function showGuide(opt) {
   ready = false;
   hideGuide();
   guide.classList.add("show");
-  if (opt.dock) guide.classList.add("dock");
-  var html = "";
+  if (opt.try) guide.classList.add("try");
+  else if (opt.dock) {
+    guide.classList.add("dock");
+    if (opt.top) guide.classList.add("top");
+  }
+  var wrap = !opt.try && opt.dock;
+  var html = wrap ? '<div class="sheet">' : "";
   if (opt.kicker) html += '<div class="k">' + opt.kicker + "</div>";
   if (opt.title) html += "<h2>" + opt.title + "</h2>";
   (opt.body || []).forEach(function (p) { html += "<p>" + p + "</p>"; });
@@ -740,14 +814,23 @@ function showGuide(opt) {
     });
     html += "</div>";
   }
+  if (wrap) html += "</div>";
   guide.innerHTML = html;
   if (opt.highlight) highlightDemo(opt.highlight);
   else clearDemo();
-  if (opt.say) speak(opt.say, GUIDE_RATE);
-  if (opt.lv != null) setTimeout(function () { playTone(opt.lv); }, 700);
+  if (opt.example) {
+    playTriple(opt.example.lv, opt.example.name, function () {
+      if (opt.say) speak(opt.say, GUIDE_RATE);
+    });
+  } else if (opt.say) {
+    speak(opt.say, GUIDE_RATE);
+  }
   if (opt.try) {
     tryMode = opt.try;
     pitchOn = opt.pitch !== false;
+    tutOnce = false;
+    if (opt.try === "explore") tutSeen = {};
+    if (opt.try === "pan") panMark = page.scrollTop;
     bindHit();
     ready = true;
   }
@@ -759,8 +842,7 @@ function showGuide(opt) {
       });
     });
   } else {
-    guideHandler = opt.next || hideGuide;
-    guide.onclick = function () { if (guideHandler) guideHandler(); };
+    bindGuideTap(opt.next || hideGuide);
   }
 }
 function bindHit() {
@@ -778,7 +860,7 @@ function onActivate(cur) {
   if (tryMode === "activate") {
     speak("对，这就是选中", GUIDE_RATE);
     tryMode = "";
-    setTimeout(function () { nextTut(); }, 1000);
+    setTimeout(function () { tutAdvance(); }, 900);
     return;
   }
   if (tryMode === "explore" || tryMode === "adapt" || tryMode === "pan") {
@@ -824,7 +906,7 @@ function announceTrial() {
     kicker: kind,
     title: trial.title,
     body: [trial.say, condTxt, "找到后在目标上快速点两下。点错了会提示不对，可以继续找。"],
-    hint: "点屏幕开始本题",
+      hint: "点屏幕任意位置开始本题",
     say: kind + "。" + trial.say + condTxt + "找到后快速点两下。",
     next: startTrial
   });
@@ -849,18 +931,18 @@ function startTrial() {
 function showAdapt(cond, then) {
   const c0 = cond === "C0";
   showGuide({
-    dock: 1,
+    try: "adapt",
+    pitch: !c0,
     kicker: c0 ? "第一段开始前" : "第二段开始前",
     title: c0 ? "先适应：只有语音" : "再适应：加上音高",
     body: c0
-      ? ["这一段查找题只有人说话，没有高低音。", "请先用单指在页面上滑一滑，熟悉位置。适应好了再开始题目。"]
-      : ["这一段每滑到一项，会先出一声轻轻的高低音，再说话。", "高音在外面，低音在里面。请再滑一滑，听惯这种声音后再开始。"],
+      ? ["这一段查找题只有人说话，没有高低音。", "请先用单指在上面的页面上滑一滑，熟悉位置。适应好了，点下面这块说明就开始题目。"]
+      : ["这一段每滑到一项，会先出一声轻轻的高低音，再说话。说话会比音高更响。", "高音在外面，低音在里面。请再滑一滑，听惯以后点下面这块说明开始。"],
+    hint: "点下面说明，开始题目",
     say: c0
-      ? "第一段开始前，请先适应。这一段只有语音，没有音高。请滑一滑，适应好了点开始第一段。"
-      : "第二段开始前，请再适应。现在会加上音高。高音在外面，低音在里面。适应好了点开始第二段。",
-    try: "adapt",
-    pitch: !c0,
-    actions: [{ label: c0 ? "开始第一段题目" : "开始第二段题目", run: then }]
+      ? "第一段开始前，请先适应。这一段只有语音，没有音高。请在上面滑一滑。适应好了，点下面说明，开始第一段。"
+      : "第二段开始前，请再适应。现在会加上音高。高音在外面，低音在里面。说话比音高更响。适应好了，点下面说明，开始第二段。",
+    next: then
   });
 }
 function nextTrial() {
@@ -876,7 +958,7 @@ function nextTrial() {
       kicker: "第一段结束",
       title: "只有语音的部分做完了",
       body: ["刚才两道查找题都没有音高。", "接下来第二段会加上音高。先不要急着找，我们会再给你一段时间适应。"],
-      hint: "点屏幕进入第二段适应",
+      hint: "点屏幕任意位置进入第二段适应",
       say: "第一段结束。刚才只有语音。接下来会加上音高，先再适应一下。点屏幕继续。",
       next: function () { nextTrial(); }
     });
@@ -941,115 +1023,158 @@ function nextTut() {
   runTut();
 }
 function runTut() {
-  const go = { label: "继续", run: nextTut };
+  tutOnce = false;
   const steps = [
     function () {
       showGuide({
         kicker: "使用说明",
         title: "这是实验页，不是真的淘宝",
-        body: ["商品和价格都是实验用的。请戴上耳机，音量开到舒服为止。", "下面会指着真实页面讲：每一层在哪里、是什么声音。也可以马上动手试。"],
-        hint: "点屏幕继续",
-        say: "这是实验页，不是真的淘宝。请戴上耳机。接下来会指着页面讲每一层在哪里、是什么声音，你也可以动手试。点屏幕继续。",
-        next: nextTut
+        body: ["商品和价格都是实验用的。请戴上耳机，音量开到说话听得清楚为止。", "接下来会按你平时找东西的顺序，一层一层听。每一层都会先连着播三次，再讲这一层是干什么的。"],
+        hint: "点屏幕任意位置继续",
+        say: "这是实验页，不是真的淘宝。请戴上耳机。接下来会一层一层听。每一层都先连着播三次示例，再讲为什么要这样分。请点屏幕任意位置继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, highlight: "[data-demo=l1-cart]", lv: 0, actions: [go],
-        kicker: "第一层 · 最外层 · 高音",
+        kicker: "为什么要分层",
+        title: "看不见屏幕时，先分清地方",
+        body: [
+          "看不见的时候，很难知道手指在导航上，还是在某一件商品上。所以用高低音帮你分地方。",
+          "最高音是最常碰到的导航：进出、搜索、购物车都靠它。然后是区域名字，告诉你到了秒杀还是猜你喜欢。再往里是一件商品、它叫什么、多少钱。最低是优惠、收藏这些附加信息。"
+        ],
+        hint: "点屏幕任意位置继续",
+        say: "看不见屏幕的时候，很难知道手指在导航上，还是在某一件商品上。所以按你平时找东西的顺序分层。最高音是导航，进出和搜索都靠它。然后是区域名字，告诉你到了哪一块。再往里是一件商品、它叫什么、多少钱。最低是优惠收藏。接下来每一层都会先连着播三次。请点屏幕任意位置继续。",
+        next: tutAdvance
+      });
+    },
+    function () {
+      showGuide({
+        dock: 1, top: 1, highlight: "[data-demo=l1-cart]",
+        example: { lv: 0, name: "购物车" },
+        kicker: "第一层 · 导航 · 最高音",
         title: "底部购物车",
-        body: ["屏幕最下面这一块是购物车。它属于第一层，也就是最外面的导航。", "请听这个比较高的音。顶部频道、搜索、底部淘宝、消息，滑到时都是这种高音。"],
-        say: "请看最下面。这是购物车，第一层，最外面。请听这个比较高的音。搜索和底部标签也是这一层。"
+        body: ["购物车、搜索、底部这几个按钮，是进出页面时最常碰到的入口。", "所以放在最外面，声音最高。一听见这个高音，就知道手指还在导航上，还没进到商品里。"],
+        hint: "听完三次后，点屏幕任意位置继续",
+        say: "这是购物车。导航最常用，进出、搜东西、看买了什么都靠它，所以声音最高。顶部搜索和底部标签也是这一层。请点屏幕任意位置继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, highlight: "[data-demo=l1-search]", lv: 0, actions: [go],
-        kicker: "第一层 · 同样在上面",
-        title: "搜索按钮也是第一层",
-        body: ["上面橙色的搜索，和刚才的购物车是同一层，所以是同一个高音。", "第一层大约出现在屏幕最顶和最底。"],
-        say: "上面橙色搜索也是第一层，同一个高音。第一层在屏幕最顶和最底。"
+        dock: 1, highlight: "[data-demo=l1-search]",
+        example: { lv: 0, name: "搜索" },
+        kicker: "第一层 · 同样是导航",
+        title: "搜索也是第一层",
+        body: ["上面橙色的搜索，和购物车干的是同一类事：带你去别的地方。", "所以是同一个高音。记住：顶上和底下这些常用入口，都是最高的那一声。"],
+        hint: "听完三次后，点屏幕任意位置继续",
+        say: "搜索也是导航，和购物车同一个高音。顶上和底下这些常用入口，都是最高的那一声。请点屏幕任意位置继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, highlight: "[data-demo=l2-icon]", lv: 1, actions: [go],
-        kicker: "第二层 · 频道和入口 · 稍低",
+        dock: 1, highlight: "[data-demo=l2-icon]",
+        example: { lv: 1, name: "天猫新品" },
+        kicker: "第二层 · 频道入口 · 低一档",
         title: "这一排圆形图标",
-        body: ["天猫新品这些圆形入口是第二层。音比刚才低一点。", "限时秒杀、猜你喜欢这些区域标题，也在第二层。"],
-        say: "这一排圆形图标是第二层，音比刚才低一点。区域标题也在这一层。"
+        body: ["天猫新品这些圆形入口，是进各个频道的大门。", "比导航少用一点，但还是整块内容的入口。声音比导航低一档，告诉你：已经离开最外层，进到内容区了。"],
+        hint: "听完三次后，点屏幕任意位置继续",
+        say: "这一排圆形图标是第二层。它是进各个频道的大门。声音比导航低一档，表示已经离开最外层，进到内容区了。请点屏幕任意位置继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, highlight: "[data-demo=l2-sec]", lv: 1, actions: [go],
+        dock: 1, highlight: "[data-demo=l2-sec]",
+        example: { lv: 1, name: "限时秒杀" },
         kicker: "第二层 · 区域标题",
         title: "限时秒杀四个字",
-        body: ["这里是一块区域的名字，还是第二层，所以声音和刚才的图标接近。"],
-        say: "限时秒杀四个字也是第二层，声音和刚才的图标接近。"
+        body: ["这是一块区域的名字。看不见屏幕时，先听到区域名，才知道自己滑到秒杀了，还是猜你喜欢了。", "区域标题和刚才的频道入口用接近的声音，都在告诉你：你现在在哪一块。"],
+        hint: "听完三次后，点屏幕任意位置继续",
+        say: "限时秒杀四个字是这块区域的名字。看不见的时候，先听到区域名，才知道自己到了哪一块。它和刚才的频道入口是同一层。请点屏幕任意位置继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, highlight: "[data-demo=l3-sk]", lv: 2, actions: [go],
-        kicker: "第三层 · 商品卡 · 再低一些",
+        dock: 1, highlight: "[data-demo=l3-sk]",
+        example: { lv: 2, name: "秒杀商品" },
+        kicker: "第三层 · 一件商品",
         title: "这张耳机卡片",
-        body: ["整张商品卡是第三层。中间这几层的音比较接近，能听出比外面低、比里面高就可以。"],
-        say: "这张耳机商品卡是第三层，再低一些。中间这几层比较接近。"
+        body: ["整张商品卡是一件具体的东西。", "听见这一层，意思是手指已经落到某一件商品上了。可以接着听它叫什么、多少钱。"],
+        hint: "听完三次后，点屏幕任意位置继续",
+        say: "这张耳机卡片是第三层，代表一件商品。听见这一层，就是手指已经落到某一件东西上了。请点屏幕任意位置继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, highlight: "[data-demo=l4-title]", lv: 3, actions: [go],
-        kicker: "第四层 · 标题",
+        dock: 1, highlight: "[data-demo=l4-title]",
+        example: { lv: 3, name: "商品标题" },
+        kicker: "第四层 · 这件东西叫什么",
         title: "商品标题文字",
-        body: ["卡片里面的标题是第四层。位置在卡片下半，声音又低一点。"],
-        say: "商品标题是第四层，在卡片里面，声音又低一点。"
+        body: ["标题告诉你这件东西叫什么。", "找东西时，常常是先摸到卡片，再听标题，确认是不是要找的那一件。"],
+        hint: "听完三次后，点屏幕任意位置继续",
+        say: "商品标题是第四层，告诉你这件东西叫什么。找的时候先摸到卡片，再听标题确认。请点屏幕任意位置继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, highlight: "[data-demo=l5-price]", lv: 4, actions: [go],
-        kicker: "第五层 · 图片和价格",
+        dock: 1, highlight: "[data-demo=l5-price]",
+        example: { lv: 4, name: "五十九元" },
+        kicker: "第五层 · 价格和图片",
         title: "五十九元这个价格",
-        body: ["价格、图片属于第五层，更靠里。滑到数字或主图时，会听到这种更低的音。"],
-        say: "五十九元这个价格是第五层，图片也是。滑到这里会更低。"
+        body: ["价格和图片更靠里。听这一层，是在确认贵不贵、看的是不是主图。", "决定买不买，多半靠这里。"],
+        hint: "听完三次后，点屏幕任意位置继续",
+        say: "五十九元这个价格是第五层，图片也是。听这一层，是在确认贵不贵。请点屏幕任意位置继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, highlight: "[data-demo=l6-fav]", lv: 5, actions: [go],
-        kicker: "第六层 · 优惠和收藏 · 最低",
+        dock: 1, highlight: "[data-demo=l6-fav]",
+        example: { lv: 5, name: "收藏" },
+        kicker: "第六层 · 附加信息 · 最低音",
         title: "收藏人数这些小字",
-        body: ["优惠、收藏、看相似是最里面一层，音最低。", "第三到第五层本来就比较难分，实验里能分出偏高、偏低就可以。"],
-        say: "收藏这些小字是第六层，最低。中间几层比较难分，能分出偏高偏低就可以。"
+        body: ["优惠、收藏、看相似不是每次都要听，所以放在最里面，声音最低。", "听见最低这一声，就知道已经滑到细节小字了。"],
+        hint: "听完三次后，点屏幕任意位置继续",
+        say: "收藏这些小字是第六层，最低。优惠收藏是附加信息，不是每次都要听，所以放在最里面。请点屏幕任意位置继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, try: "explore", pitch: true, actions: [{ label: "我滑过了，继续", run: nextTut }],
+        try: "explore", pitch: true,
         kicker: "请动手",
         title: "现在用一根手指滑一滑",
-        body: ["请在上面的页面上慢慢滑。指到哪里就会先出音，再读名称。", "请真正滑几下，不要只听说明。"],
-        say: "请现在用一根手指在屏幕上慢慢滑。指到哪里就读哪里。试好了点我滑过了。"
+        body: ["请在上面的页面上慢慢滑。指到哪里会先出一声高低音，再读名称。说话会比音高更响。", "滑过三个不同的地方，就会自动进入下一步。也可以点下面这块说明继续。"],
+        hint: "滑过三处，或点下面说明继续",
+        say: "请现在用一根手指在上面慢慢滑。指到哪里就读哪里。说话比音高更响。滑过三个不同的地方会自动继续。也可以点下面说明继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, try: "activate", pitch: true, actions: [{ label: "我点过了，继续", alt: 1, run: nextTut }],
+        try: "activate", pitch: true,
         kicker: "请动手",
         title: "快速点两下试试选中",
-        body: ["把手指停在任意一项上，快速点两下。听到「选中」就对了。"],
-        say: "请把手指停在任意一项上，快速点两下。这表示选中。"
+        body: ["把手指停在任意一项上，快速点两下。听到「选中」就对了，会自动进入下一步。", "也可以点下面这块说明继续。"],
+        hint: "快速点两下，或点下面说明继续",
+        say: "请把手指停在任意一项上，快速点两下。这表示选中。点对了会自动继续。",
+        next: tutAdvance
       });
     },
     function () {
       showGuide({
-        dock: 1, try: "pan", pitch: true, actions: [{ label: "我翻过了，开始第一段", run: function () { clearDemo(); startProtocol(); } }],
+        try: "pan", pitch: true,
         kicker: "请动手",
         title: "两根手指可以翻页",
-        body: ["两根手指上下滑，页面会移动。在秒杀横条上左右滑，可以听到更多商品。", "后面先做只有语音的第一段，再做加上音高的第二段。"],
-        say: "请用两根手指上下滑翻一翻。后面先做只有语音的第一段，再做有音高的第二段。试好了点开始第一段。"
+        body: ["两根手指上下滑，页面会移动。在秒杀横条上左右滑，可以听到更多商品。", "翻一下就会自动开始第一段。后面先做只有语音的第一段，再做加上音高的第二段。"],
+        hint: "两指翻一下，或点下面说明开始",
+        say: "请用两根手指上下滑翻一翻。翻一下就会开始第一段。后面先做只有语音的第一段，再做有音高的第二段。",
+        next: tutAdvance
       });
     }
   ];
