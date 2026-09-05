@@ -452,7 +452,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.13</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.14</span>
   <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
@@ -598,7 +598,8 @@
   </div>
 </div>
 
-<audio id="tonePlayer" playsinline webkit-playsinline></audio>
+<audio id="tonePlayerA" playsinline webkit-playsinline></audio>
+<audio id="tonePlayerB" playsinline webkit-playsinline></audio>
 <script>
 // ============================================================
 //  全局
@@ -865,21 +866,48 @@ function getRandomPath() {
 }
 
 // ============================================================
-//  发声：WAV（iPad 能出声）+ 振荡器；每次只保留一个音
+//  发声：WAV 双轨交叉淡出，避免移动时掐音刺啦
 // ============================================================
 const liveOsc = [];
-let toneUrl = '';
+let toneUrls = [];
+let toneFlip = 0;
+let fadeTimer = 0;
 
 function setAudioStatus(text) {
   const el = document.getElementById('audioStatus');
   if (el) el.textContent = text;
 }
 
-function stopAllSounds() {
-  const player = document.getElementById('tonePlayer');
-  if (player) {
-    try { player.pause(); player.currentTime = 0; } catch (err) {}
+function tonePlayers() {
+  return [
+    document.getElementById('tonePlayerA'),
+    document.getElementById('tonePlayerB')
+  ];
+}
+
+function fadeOutPlayer(player) {
+  if (!player) return;
+  const startVol = player.volume;
+  if (player.paused || startVol <= 0) {
+    try { player.pause(); player.volume = 1; } catch (err) {}
+    return;
   }
+  const t0 = performance.now();
+  const ms = 45;
+  function step() {
+    const k = Math.min(1, (performance.now() - t0) / ms);
+    try { player.volume = startVol * (1 - k); } catch (err) {}
+    if (k < 1) requestAnimationFrame(step);
+    else {
+      try { player.pause(); player.currentTime = 0; player.volume = 1; } catch (err) {}
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function stopAllSounds() {
+  if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = 0; }
+  tonePlayers().forEach(fadeOutPlayer);
   const c = audioCtx;
   const t = c ? c.currentTime : 0;
   liveOsc.forEach(function (o) {
@@ -887,9 +915,9 @@ function stopAllSounds() {
       if (o._gain) {
         o._gain.gain.cancelScheduledValues(t);
         o._gain.gain.setValueAtTime(Math.max(o._gain.gain.value, 0.0001), t);
-        o._gain.gain.linearRampToValueAtTime(0.0001, t + 0.02);
+        o._gain.gain.linearRampToValueAtTime(0.0001, t + 0.04);
       }
-      o.stop(t + 0.03);
+      o.stop(t + 0.05);
     } catch (err) {}
   });
   liveOsc.length = 0;
@@ -897,7 +925,7 @@ function stopAllSounds() {
 
 function makeWavBlob(freq, durSec, peak) {
   const sr = 44100;
-  const n = Math.max(1200, Math.floor(sr * durSec));
+  const n = Math.max(2205, Math.floor(sr * durSec));
   const dataSize = n * 2;
   const buf = new ArrayBuffer(44 + dataSize);
   const v = new DataView(buf);
@@ -917,8 +945,8 @@ function makeWavBlob(freq, durSec, peak) {
   v.setUint16(34, 16, true);
   wstr(36, 'data');
   v.setUint32(40, dataSize, true);
-  const fadeIn = Math.min(441, Math.floor(n / 10));
-  const fadeOut = Math.min(882, Math.floor(n / 5));
+  const fadeIn = Math.min(882, Math.floor(n / 8));
+  const fadeOut = Math.min(2205, Math.floor(n / 3));
   for (let i = 0; i < n; i++) {
     let env = 1;
     if (i < fadeIn) env = i / fadeIn;
@@ -940,12 +968,6 @@ function unlockAudioSync() {
       try { audioCtx.resume(); } catch (err) {}
     }
   }
-  const player = document.getElementById('tonePlayer');
-  if (player && player.paused) {
-    const p = player.play();
-    if (p && p.catch) p.catch(function () {});
-    try { player.pause(); } catch (err) {}
-  }
 }
 
 function ensureAudio() {
@@ -956,16 +978,24 @@ function playTone(freq, dur, type, vol) {
   if (dur == null) dur = 0.4;
   if (vol == null) vol = 0.5;
   if (!isFinite(freq) || freq <= 0) return;
-  stopAllSounds();
   unlockAudioSync();
+  const pair = tonePlayers();
+  const prev = pair[toneFlip];
+  toneFlip = 1 - toneFlip;
+  const next = pair[toneFlip];
+  fadeOutPlayer(prev);
   try {
-    const blob = makeWavBlob(freq, dur, Math.min(0.92, vol + 0.25));
-    if (toneUrl) URL.revokeObjectURL(toneUrl);
-    toneUrl = URL.createObjectURL(blob);
-    const player = document.getElementById('tonePlayer');
-    if (player) {
-      player.src = toneUrl;
-      const p = player.play();
+    const blob = makeWavBlob(freq, dur, Math.min(0.78, vol));
+    const url = URL.createObjectURL(blob);
+    toneUrls.push(url);
+    while (toneUrls.length > 4) {
+      const old = toneUrls.shift();
+      try { URL.revokeObjectURL(old); } catch (err) {}
+    }
+    if (next) {
+      next.volume = 1;
+      next.src = url;
+      const p = next.play();
       if (p && p.catch) p.catch(function () { setAudioStatus('⚠ 播放被拦截，请再点开始'); });
     }
   } catch (err) {}
@@ -1727,7 +1757,7 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.13');
+addLog('system','系统初始化完成 v1.14');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
