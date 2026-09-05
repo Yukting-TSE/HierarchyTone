@@ -452,7 +452,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.12</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.13</span>
   <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
@@ -817,20 +817,18 @@ function trialsToCsv(trials) {
 }
 
 // ============================================================
-//  宽间距旋律：相对音程与原稿相同，整体从 C3 上移纯四度到 F3
-//  C3 在 iPad 喇叭上出不来；C4 又偏尖。F3≈175Hz 是中间档。
+//  宽间距旋律编码（与 Research prototype 原稿相同：C3 起算）
 // ============================================================
-const BASE_FREQ = 174.61;
+const BASE_FREQ_C3 = 130.81;
 const MELODY_COL = ['C', 'F', 'A#', 'D#'];
 const ROW_TRANSPOSE = [0, 7, 14, 21];
 const NOTE_SEMITONES = {
   'C':0,'C#':1,'D':2,'D#':3,'E':4,'F':5,
   'F#':6,'G':7,'G#':8,'A':9,'A#':10,'B':11
 };
-const PITCH_SHIFT = 5;
 
 function calcFreq(semitonesFromC3) {
-  return BASE_FREQ * Math.pow(2, semitonesFromC3 / 12);
+  return BASE_FREQ_C3 * Math.pow(2, semitonesFromC3 / 12);
 }
 function getNodeSemitones(r, c) {
   return NOTE_SEMITONES[MELODY_COL[c]] + ROW_TRANSPOSE[r];
@@ -839,7 +837,7 @@ function getNodeFreq(r, c) {
   return calcFreq(getNodeSemitones(r, c));
 }
 function getNodeNoteName(r, c) {
-  const semi = getNodeSemitones(r, c) + PITCH_SHIFT;
+  const semi = getNodeSemitones(r, c);
   const oct = 3 + Math.floor(semi / 12);
   const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   return names[((semi % 12) + 12) % 12] + oct;
@@ -1729,7 +1727,7 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.12');
+addLog('system','系统初始化完成 v1.13');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
