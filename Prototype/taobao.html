@@ -129,14 +129,14 @@
   .guess i { width: 36px; height: 1px; background: #ddd; display: block; }
 
   .feed {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 6px 14px; align-items: start;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 6px 10px; align-items: stretch;
   }
   @media (min-width: 700px) { .feed { grid-template-columns: 1fr 1fr 1fr; } }
   @media (min-width: 1024px) { .feed { grid-template-columns: 1fr 1fr 1fr 1fr; } }
 
-  .card { background: #fff; border-radius: 10px; overflow: hidden; }
+  .card { background: #fff; border-radius: 10px; overflow: hidden; height: 100%; display: flex; flex-direction: column; }
   .cover {
-    aspect-ratio: 1; position: relative; overflow: hidden;
+    aspect-ratio: 1; position: relative; overflow: hidden; flex-shrink: 0;
   }
   .cover .obj {
     position: absolute; inset: 0;
@@ -161,7 +161,7 @@
     background: rgba(0,0,0,.35); color: #fff; font-size: 10px;
     padding: 1px 4px; border-radius: 2px;
   }
-  .body { padding: 6px 8px 8px; }
+  .body { padding: 6px 8px 8px; flex: 1; display: flex; flex-direction: column; }
   .title {
     font-size: 13px; line-height: 1.35; color: #111; font-weight: 600;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -182,12 +182,18 @@
   .chip.g { color: #16a34a; border-color: #86efac; }
   .chip.k { color: #666; border-color: #ddd; }
   .shop { margin-top: 3px; font-size: 11px; color: #999; }
-  .price-row { display: flex; align-items: baseline; gap: 4px; margin-top: 4px; }
+  .price-row { display: flex; align-items: baseline; gap: 4px; margin-top: auto; padding-top: 4px; }
   .yen { color: #ff5000; font-size: 12px; font-weight: 800; }
   .num { color: #ff5000; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
   .after { font-size: 11px; color: #ff5000; }
   .fav { margin-left: auto; font-size: 12px; color: #999; white-space: nowrap; }
   .more { font-size: 14px; color: #bbb; padding: 0 2px; }
+  .feed-end {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 16px 10px 20px;
+    font-size: 13px; color: #999; font-weight: 600;
+  }
 
   #coupon {
     position: absolute; left: 0; right: 0; z-index: 4;
@@ -444,7 +450,11 @@
     { obj: "☕", bg: "linear-gradient(180deg,#efebe9,#bcaaa4)", img: "图片，咖啡机", tmall: 1, title: "家用全自动咖啡机研磨一体小型", tsp: "天猫，家用咖啡机", tags: [["chip", "新品", "新品"], ["p-d", "买过的人都说好", "买过的人都说好"]], price: "599", psp: "五百九十九元", after: 1, fav: "☆ 1.1万", fsp: "一万一千人收藏", shop: "厨房电器旗舰店", ssp: "厨房电器旗舰店", sp: "咖啡机，新品，券后价五百九十九元，一万一千人收藏" },
     { obj: "🐱", bg: "linear-gradient(180deg,#fff8e1,#ffe082)", img: "图片，猫粮", title: "成猫幼猫全价猫粮营养增肥发腮", tsp: "全价猫粮", tags: [["chip", "满99减15", "满九十九减十五"]], price: "68", psp: "六十八元", after: 1, fav: "☆ 9万+", fsp: "收藏九万以上", sp: "猫粮，满九十九减十五，券后价六十八元，收藏九万以上" },
     { obj: "✨", bg: "linear-gradient(180deg,#f3e5f5,#ce93d8)", img: "图片，护肤套装", tmall: 1, title: "护肤套装补水保湿精华水乳礼盒", tsp: "天猫，护肤套装", tags: [["chip", "奢品精选", "奢品精选"], ["p-o", "超级立减百分之十八", "超级立减 18%"]], price: "3280", psp: "三千二百八十元", after: 1, fav: "☆ 5200", fsp: "五千二百人收藏", sp: "护肤套装，奢品精选，超级立减百分之十八，券后价三千二百八十元，五千二百人收藏" },
-    { obj: "⌚", bg: "linear-gradient(180deg,#eceff1,#455a64)", img: "图片，手表", video: 1, title: "智能手表心率血氧运动户外圆盘", tsp: "智能手表", tags: [["chip", "数码热卖", "数码热卖"], ["chip g", "官方验货", "官方验货"]], price: "199", psp: "一百九十九元", after: 1, fav: "☆ 2.8万", fsp: "二万八千人收藏", sp: "智能手表，数码热卖，券后价一百九十九元，二万八千人收藏" }
+    { obj: "⌚", bg: "linear-gradient(180deg,#eceff1,#455a64)", img: "图片，手表", video: 1, title: "智能手表心率血氧运动户外圆盘", tsp: "智能手表", tags: [["chip", "数码热卖", "数码热卖"], ["chip g", "官方验货", "官方验货"]], price: "199", psp: "一百九十九元", after: 1, fav: "☆ 2.8万", fsp: "二万八千人收藏", sp: "智能手表，数码热卖，券后价一百九十九元，二万八千人收藏" },
+    { obj: "🧺", bg: "linear-gradient(180deg,#e3f2fd,#90caf9)", img: "图片，收纳箱", title: "衣服收纳箱家用整理箱衣柜储物盒", tsp: "衣服收纳箱", tags: [["chip", "包邮", "包邮"]], price: "19.9", psp: "十九元九", fav: "☆ 4.2万", fsp: "四万二千人收藏", sp: "收纳箱，十九元九，四万二千人收藏" },
+    { obj: "🍚", bg: "linear-gradient(180deg,#fff3e0,#ffcc80)", img: "图片，电饭煲", tmall: 1, title: "家用电饭煲智能预约多功能煮饭锅", tsp: "天猫，家用电饭煲", tags: [["chip", "新品", "新品"], ["p-o", "超级立减百分之十", "超级立减 10%"]], price: "159", psp: "一百五十九元", after: 1, fav: "☆ 1.3万", fsp: "一万三千人收藏", shop: "厨房电器旗舰店", ssp: "厨房电器旗舰店", sp: "电饭煲，新品，券后价一百五十九元，一万三千人收藏" },
+    { obj: "🕶️", bg: "linear-gradient(180deg,#eceff1,#78909c)", img: "图片，太阳镜", title: "偏光太阳镜男开车驾驶墨镜防紫外线", tsp: "偏光太阳镜", tags: [["p-o", "超级立减百分之八", "超级立减 8%"]], price: "39", psp: "三十九元", after: 1, fav: "☆ 8600", fsp: "八千六百人收藏", sp: "太阳镜，超级立减百分之八，券后价三十九元，八千六百人收藏" },
+    { obj: "🧸", bg: "linear-gradient(180deg,#fce4ec,#f8bbd0)", img: "图片，玩偶", title: "可爱毛绒玩偶抱枕公仔女生礼物", tsp: "毛绒玩偶抱枕", tags: [["chip", "包邮", "包邮"], ["p-g", "晚发必赔", "晚发必赔"]], price: "29.9", psp: "二十九元九", fav: "☆ 6万+", fsp: "收藏六万以上", sp: "毛绒玩偶，二十九元九，收藏六万以上" }
   ];
   function esc(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -471,7 +481,7 @@
           '<div class="sim-el fav" data-lv="5" data-sp="' + esc(p.fsp) + '">' + esc(p.fav) + "</div>" +
           '<div class="sim-el more" data-lv="5" data-sp="看相似，按钮">···</div>' +
         "</div></div></div>";
-  }).join("");
+  }).join("") + '<div class="sim-el feed-end" data-lv="1" data-sp="已经到底了，没有更多商品">已经到底了</div>';
   var card = document.querySelector(".card");
   if (card) card.setAttribute("data-demo", "l3-card");
 })();
