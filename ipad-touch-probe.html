@@ -49,6 +49,7 @@
     -webkit-appearance: none; appearance: none;
   }
   #gate small { display: block; margin-top: 14px; font-size: 18px; font-weight: 500; opacity: .7; }
+  #voiceSel { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -56,6 +57,9 @@
 <div id="ui"></div>
 <div id="hit"></div>
 <button type="button" id="gate">点击屏幕开始<small>只会读手指底下的那一项</small></button>
+<input id="spRate" type="hidden" value="4">
+<input id="spVol" type="hidden" value="0.8">
+<select id="voiceSel" aria-hidden="true"></select>
 <script>
 const ITEMS = [
   ["L1", "顶部导航"], ["L1", "搜索框"], ["L2", "频道推荐"], ["L2", "频道热榜"],
@@ -65,7 +69,6 @@ const ITEMS = [
   ["L5", "商品主图"], ["L3", "连衣裙"], ["L1", "消息中心"], ["L2", "体育频道"]
 ];
 const FREQ = { L1: 523, L2: 392, L3: 294, L4: 220, L5: 165 };
-const RATE = 2;
 const ui = document.getElementById("ui");
 const hud = document.getElementById("hud");
 const hit = document.getElementById("hit");
@@ -81,30 +84,56 @@ ITEMS.forEach(([lv, name], i) => {
   ui.appendChild(el);
 });
 
-let ctx = null, voice = null, lastId = null, lastTap = 0, armed = false, panY = null;
+let ctx = null, lastId = null, lastTap = 0, armed = false, panY = null;
 
-function pickMandarin() {
-  const vs = speechSynthesis.getVoices() || [];
-  const cn = vs.filter((v) => {
-    const lang = (v.lang || "").toLowerCase().replace("_", "-");
-    const name = v.name || "";
-    if (/zh-tw|zh-hk|cantonese|sinji|meijia|台灣|粤|廣東/i.test(lang + name)) return false;
-    return lang === "zh-cn" || /中国|普通话|ting-?ting|hanhan|nana|lilian|xiaoxiao/i.test(name);
+function loadV() {
+  const s = document.getElementById("voiceSel");
+  const vs = speechSynthesis.getVoices();
+  s.innerHTML = "";
+  const zh = vs.filter((v) => (v.lang || "").toLowerCase().startsWith("zh"));
+  const all = zh.concat(vs.filter((v) => !(v.lang || "").toLowerCase().startsWith("zh")));
+  if (!all.length) {
+    s.innerHTML = "<option value=\"\">默认</option>";
+    return;
+  }
+  let pick = "";
+  all.forEach((v) => {
+    const o = document.createElement("option");
+    o.value = String(vs.indexOf(v));
+    o.textContent = v.name + " (" + v.lang + ")";
+    s.appendChild(o);
+    const key = ((v.lang || "") + " " + (v.name || "")).toLowerCase();
+    if (/zh-cn|zh_cn|zh-hans|普通话|ting/.test(key) && !/zh-tw|zh-hk|meijia|sin-?ji|粤|廣東/.test(key)) {
+      pick = o.value;
+    } else if (!pick && (v.lang || "").toLowerCase().startsWith("zh")) {
+      pick = o.value;
+    }
   });
-  return cn.find((v) => /普通话|ting-?ting|hanhan/i.test(v.name)) || cn[0] || null;
+  if (pick) s.value = pick;
 }
+speechSynthesis.addEventListener("voiceschanged", loadV);
+loadV();
+setTimeout(loadV, 300);
 
-function speak(text, rate) {
-  if (!window.speechSynthesis || !text) return;
+function speak(txt) {
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "zh-CN";
-  u.rate = rate;
-  u.volume = 1;
-  u.pitch = 1;
-  if (voice) u.voice = voice;
+  const u = new SpeechSynthesisUtterance(txt);
+  const vs = speechSynthesis.getVoices();
+  const i = parseInt(document.getElementById("voiceSel").value, 10);
+  if (vs[i]) {
+    u.voice = vs[i];
+    u.lang = vs[i].lang;
+  }
+  u.rate = +document.getElementById("spRate").value;
+  u.volume = +document.getElementById("spVol").value;
   speechSynthesis.speak(u);
 }
+setInterval(function () {
+  if (speechSynthesis.speaking && !speechSynthesis.paused) {
+    speechSynthesis.pause();
+    speechSynthesis.resume();
+  }
+}, 10000);
 
 function beep(freq) {
   if (!ctx) return;
@@ -139,7 +168,7 @@ function explore(t) {
   if (cell.dataset.id === lastId) return;
   lastId = cell.dataset.id;
   beep(FREQ[cell.dataset.lv] || 300);
-  speak(cell.dataset.lv + "，" + cell.dataset.sp, RATE);
+  speak(cell.dataset.sp);
 }
 
 function midpointY(touches) {
@@ -158,7 +187,7 @@ function onTouchStart(e) {
   const now = Date.now();
   if (now - lastTap < 380 && lastId) {
     const cur = document.querySelector(".cell.on");
-    speak("选中，" + (cur ? cur.dataset.sp : ""), RATE);
+    speak("选中，" + (cur ? cur.dataset.sp : ""));
     beep(880);
     lastTap = 0;
     return;
@@ -191,23 +220,22 @@ function unlock() {
     return;
   }
   armed = true;
-  voice = pickMandarin();
+  loadV();
   ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state === "suspended") ctx.resume();
-  speak("开始", 1);
+  speak("开始");
   gate.remove();
   hit.style.display = "block";
   hit.addEventListener("touchstart", onTouchStart, { passive: false });
   hit.addEventListener("touchmove", onTouchMove, { passive: false });
   hit.addEventListener("touchend", onTouchEnd, { passive: false });
   hit.addEventListener("touchcancel", onTouchEnd, { passive: false });
-  const voiceName = voice ? voice.name : "系统中文";
-  hud.textContent = "普通话 · " + voiceName + " · " + RATE + "倍速 · 单指朗读";
+  const vs = speechSynthesis.getVoices();
+  const i = parseInt(document.getElementById("voiceSel").value, 10);
+  const voiceName = vs[i] ? vs[i].name : "未选中文语音";
+  hud.textContent = voiceName + " · 4倍速 · 单指朗读";
 }
 
-speechSynthesis.addEventListener("voiceschanged", () => {
-  if (!voice) voice = pickMandarin();
-});
 gate.addEventListener("click", unlock);
 </script>
 </body>
