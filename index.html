@@ -233,6 +233,7 @@
     -webkit-appearance: none; appearance: none;
   }
   #gate small { display: block; margin-top: 14px; font-size: 18px; font-weight: 500; opacity: .7; }
+  #gate .sub { display: block; margin-top: 8px; font-size: 16px; font-weight: 500; opacity: .55; }
 </style>
 </head>
 <body>
@@ -391,7 +392,7 @@
   <div class="sim-el nav" data-lv="0" data-sp="我的淘宝，按钮"><div class="n">😊</div>我的淘宝</div>
 </div>
 <div id="hit"></div>
-<button type="button" id="gate">点击屏幕开始<small>单指滑动朗读 · 双指翻页</small></button>
+<button type="button" id="gate">点击屏幕开始<small>请先戴上耳机</small><span class="sub">单指滑动朗读 · 双指翻页</span></button>
 <script>
 (function renderFeed() {
   const items = [
@@ -445,8 +446,9 @@
 })();
 
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
-const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.15;
-const SPEECH_RATE = 4, SPEECH_VOL = 0.8;
+const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.28;
+const LOUD = [1, 1.15, 1.35, 1.6, 1.9, 2.25];
+const SPEECH_RATE = 4, SPEECH_VOL = 0.8, GUIDE_RATE = 1.15;
 const page = document.getElementById("page");
 const tabs = document.getElementById("tabs");
 const icons = document.getElementById("icons");
@@ -462,7 +464,7 @@ icons.addEventListener("scroll", function () {
   });
 });
 
-let ctx = null, lastId = null, lastTap = 0, armed = false, pan = null, panAxis = "page", mandarinVoice = null;
+let ctx = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -483,10 +485,12 @@ function isMainlandMandarin(v) {
 function pickMandarinVoice() {
   return (speechSynthesis.getVoices() || []).find(isMainlandMandarin) || null;
 }
-function speak(txt) {
+function speak(txt, rate) {
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(txt);
-  u.lang = "zh-CN"; u.rate = SPEECH_RATE; u.volume = SPEECH_VOL;
+  u.lang = "zh-CN";
+  u.rate = rate || SPEECH_RATE;
+  u.volume = SPEECH_VOL;
   mandarinVoice = pickMandarinVoice();
   if (mandarinVoice) u.voice = mandarinVoice;
   speechSynthesis.speak(u);
@@ -506,17 +510,27 @@ function ensureAudio() {
   if (ctx.state === "suspended") ctx.resume();
   return ctx;
 }
+function stopTones() {
+  liveOsc.forEach(function (o) { try { o.stop(); } catch (err) {} });
+  liveOsc = [];
+}
 function playTone(lv) {
   const c = ensureAudio(); if (!c) return;
-  const f = F[lv] || 523.25, t0 = c.currentTime;
-  [[f, 0.34], [f * 2, 0.04], [f * 3, 0.014]].forEach(function (part) {
+  stopTones();
+  const i = levelIndex(lv);
+  const f = F[i] || 523.25, t0 = c.currentTime, g0 = 0.22 * (LOUD[i] || 1);
+  [[1, 1], [2, 0.22], [3, 0.1], [4, 0.05]].forEach(function (h) {
     const o = c.createOscillator(), g = c.createGain();
-    o.type = "sine"; o.frequency.setValueAtTime(part[0], t0);
+    const amp = Math.min(0.58, g0 * h[1]);
+    o.type = "sine";
+    o.frequency.setValueAtTime(f * h[0], t0);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(part[1], t0 + ATT);
-    g.gain.setValueAtTime(part[1], t0 + DUR - REL);
+    g.gain.exponentialRampToValueAtTime(amp, t0 + ATT);
+    g.gain.setValueAtTime(amp, t0 + DUR - REL);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + DUR);
-    o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + DUR + 0.02);
+    o.connect(g); g.connect(c.destination);
+    o.start(t0); o.stop(t0 + DUR + 0.02);
+    liveOsc.push(o);
   });
 }
 function elementFromTouch(t) {
@@ -526,6 +540,7 @@ function elementFromTouch(t) {
   return el && el.closest ? el.closest(".sim-el") : null;
 }
 function explore(t) {
+  if (!ready) return;
   const cell = elementFromTouch(t);
   document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
   if (!cell) { lastId = null; speechSynthesis.cancel(); return; }
@@ -557,6 +572,7 @@ function axisForY(y) {
 }
 function onTouchStart(e) {
   e.preventDefault();
+  if (!ready) return;
   if (e.touches.length >= 2) {
     pan = midpoint(e.touches);
     panAxis = axisForY(pan.y);
@@ -575,6 +591,7 @@ function onTouchStart(e) {
 }
 function onTouchMove(e) {
   e.preventDefault();
+  if (!ready) return;
   if (e.touches.length >= 2) {
     const p = midpoint(e.touches);
     if (pan) {
@@ -590,6 +607,17 @@ function onTouchMove(e) {
   pan = null; explore(e.changedTouches[0]);
 }
 function onTouchEnd(e) { e.preventDefault(); if (e.touches.length < 2) pan = null; }
+function calibrate() {
+  speak("请戴上耳机。先听六种音高，从高到低", GUIDE_RATE);
+  const start = 2600, gap = 640;
+  for (let i = 0; i < 6; i++) {
+    setTimeout(function () { playTone(i); }, start + i * gap);
+  }
+  setTimeout(function () {
+    speak("可以开始。音越高，越靠上一层", GUIDE_RATE);
+    ready = true;
+  }, start + 6 * gap + 180);
+}
 function unlock() {
   if (armed) return;
   if (/MicroMessenger|DingTalk/i.test(navigator.userAgent)) {
@@ -597,14 +625,14 @@ function unlock() {
   }
   armed = true;
   mandarinVoice = pickMandarinVoice();
-  ensureAudio(); playTone(0);
-  setTimeout(function () { speak("开始"); }, (DUR + DLY) * 1000);
+  ensureAudio();
   gate.remove(); hit.style.display = "block";
   hit.addEventListener("touchstart", onTouchStart, { passive: false });
   hit.addEventListener("touchmove", onTouchMove, { passive: false });
   hit.addEventListener("touchend", onTouchEnd, { passive: false });
   hit.addEventListener("touchcancel", onTouchEnd, { passive: false });
-  hit.addEventListener("mousemove", function (e) { if (armed) explore(e); });
+  hit.addEventListener("mousemove", function (e) { if (armed && ready) explore(e); });
+  calibrate();
 }
 gate.addEventListener("click", unlock);
 </script>
