@@ -266,6 +266,40 @@
   }
   #guide.ghost > * { display: none; }
   #taskbar { display: none !important; }
+  #guide.form {
+    justify-content: flex-start;
+    touch-action: auto;
+    overflow: auto;
+    padding: 22px 18px calc(28px + env(safe-area-inset-bottom));
+  }
+  #guide.form h2 { font-size: 26px; margin-bottom: 10px; }
+  #guide.form .meta { font-size: 16px; line-height: 1.5; opacity: .7; margin: 0 0 18px; font-weight: 500; }
+  #guide.form .q { margin: 0 0 22px; }
+  #guide.form .ql { font-size: 18px; font-weight: 800; margin: 0 0 6px; }
+  #guide.form .read { font-size: 15px; line-height: 1.45; opacity: .72; margin: 0 0 10px; font-weight: 500; }
+  #guide.form .scale, #guide.form .choice { display: flex; gap: 8px; flex-wrap: wrap; }
+  #guide.form .scale button, #guide.form .choice button {
+    appearance: none; border: 0; border-radius: 12px;
+    background: #333; color: #fff; font: 700 18px/1.2 -apple-system, "PingFang SC", sans-serif;
+    padding: 14px 12px; min-height: 48px;
+  }
+  #guide.form .scale button { flex: 1; min-width: 44px; }
+  #guide.form .choice button { flex: 1; min-width: 30%; }
+  #guide.form .scale button.on, #guide.form .choice button.on { background: #ff5000; }
+  #guide.form .ends { display: flex; justify-content: space-between; font-size: 13px; opacity: .55; margin-top: 6px; }
+  #guide.form input, #guide.form textarea {
+    width: 100%; box-sizing: border-box; border: 0; border-radius: 12px;
+    padding: 14px; font: 500 18px/1.4 -apple-system, "PingFang SC", sans-serif;
+    background: #222; color: #fff;
+  }
+  #guide.form textarea { min-height: 96px; resize: vertical; }
+  #guide.form .go {
+    appearance: none; border: 0; border-radius: 14px; width: 100%;
+    padding: 16px 18px; margin-top: 8px;
+    font: 700 20px/1.3 -apple-system, "PingFang SC", sans-serif;
+    background: #ff5000; color: #fff;
+  }
+  #guide.form .go[disabled] { opacity: .4; }
 </style>
 </head>
 <body>
@@ -509,6 +543,7 @@ icons.addEventListener("scroll", function () {
 });
 
 let ctx = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
+let sessionMeta = { participant_id: "", vision: "", sr_exp: "" };
 let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
@@ -743,7 +778,7 @@ function hideGuide() {
   demoLock = false;
   speechSynthesis.cancel();
   stopTones();
-  guide.classList.remove("show", "dock", "try", "top", "ghost");
+  guide.classList.remove("show", "dock", "try", "top", "ghost", "form");
   guide.innerHTML = "";
   guide.onclick = null;
   guide.ontouchend = null;
@@ -985,6 +1020,109 @@ function endSession() {
   hit.style.display = "none";
   taskbar.classList.remove("show");
   clearDemo();
+  showSurvey();
+}
+function showForm(opt) {
+  hit.style.display = "none";
+  tryMode = "";
+  ready = false;
+  hideGuide();
+  guide.classList.add("show", "form");
+  guide.innerHTML = opt.html;
+  if (opt.say) speak(opt.say, GUIDE_RATE);
+  if (opt.bind) opt.bind(guide);
+}
+function pickExclusive(root, sel, key, store) {
+  root.querySelectorAll(sel).forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      root.querySelectorAll(sel).forEach(function (b) { b.classList.remove("on"); });
+      btn.classList.add("on");
+      store[key] = btn.getAttribute("data-v");
+    });
+  });
+}
+function showIntake() {
+  showForm({
+    say: "请研究助手填写编号和基本情况。填好后开始第一段。",
+    html: '<div class="k">研究助手填写</div><h2>建档</h2>' +
+      '<p class="meta">编号和基本情况不用读给被试听。填好后点开始。</p>' +
+      '<div class="q"><div class="ql">被试编号</div><input id="f-pid" type="text" inputmode="numeric" placeholder="例如 03" autocomplete="off"></div>' +
+      '<div class="q"><div class="ql">视力</div><div class="choice" id="f-vision">' +
+      '<button type="button" data-v="blind">全盲</button>' +
+      '<button type="button" data-v="low_vision">低视力</button></div></div>' +
+      '<div class="q"><div class="ql">读屏经验</div><div class="choice" id="f-sr">' +
+      '<button type="button" data-v="none">几乎不用</button>' +
+      '<button type="button" data-v="some">会一些</button>' +
+      '<button type="button" data-v="daily">每天用</button></div></div>' +
+      '<button type="button" class="go" id="f-go">开始第一段实验</button>',
+    bind: function (root) {
+      var store = { vision: "", sr_exp: "" };
+      pickExclusive(root, "#f-vision button", "vision", store);
+      pickExclusive(root, "#f-sr button", "sr_exp", store);
+      root.querySelector("#f-pid").addEventListener("touchend", function (e) { e.stopPropagation(); });
+      root.querySelector("#f-go").addEventListener("click", function (e) {
+        e.stopPropagation();
+        sessionMeta.participant_id = (root.querySelector("#f-pid").value || "").trim();
+        sessionMeta.vision = store.vision;
+        sessionMeta.sr_exp = store.sr_exp;
+        startProtocol();
+      });
+    }
+  });
+}
+function showSurvey() {
+  var answers = {
+    pitch_disc: "",
+    pitch_layer: "",
+    which_better: "",
+    effort_c0: "",
+    effort_c1: "",
+    improve: ""
+  };
+  showForm({
+    say: "查找做完了。接下来请研究助手把几道题读给你听，你口头回答，助手帮你点选。",
+    html: '<div class="k">研究助手口述代填</div><h2>做完后的几道题</h2>' +
+      '<p class="meta">请把灰色说明读给被试听，被试说数字或选项，你点选。最后一题把原话记下来即可。</p>' +
+      scaleQ("pitch_disc", "1. 高低音能不能分出高、中、低", "刚才第二段那些高低音，你能不能听出至少高、中、低三档？一是完全听不出，五是很容易听出。", "听不出", "很容易") +
+      scaleQ("pitch_layer", "2. 高低音有没有帮你判断在哪一层", "这些高低音有没有帮你判断手指大概在哪一层？一是完全没有帮助，五是很有帮助。", "没有帮助", "很有帮助") +
+      '<div class="q"><div class="ql">3. 哪一段更好找</div>' +
+      '<p class="read">第一段只有语音，第二段有高低音。你觉得哪一段更好找？</p>' +
+      '<div class="choice" id="q-which">' +
+      '<button type="button" data-v="c0">第一段更好</button>' +
+      '<button type="button" data-v="same">差不多</button>' +
+      '<button type="button" data-v="c1">第二段更好</button></div></div>' +
+      scaleQ("effort_c0", "4. 第一段有多费力（只有语音）", "第一段只有语音、没有高低音。做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
+      scaleQ("effort_c1", "5. 第二段有多费力（有高低音）", "第二段有高低音。做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
+      '<div class="q"><div class="ql">6. 实验还有什么可以改的</div>' +
+      '<p class="read">你觉得刚才这套实验，还有什么可以改的？想到什么说什么。</p>' +
+      '<textarea id="q-improve" placeholder="助手把原话记在这里"></textarea></div>' +
+      '<button type="button" class="go" id="q-save">保存并下载记录</button>',
+    bind: function (root) {
+      ["pitch_disc", "pitch_layer", "effort_c0", "effort_c1"].forEach(function (k) {
+        pickExclusive(root, "#q-" + k + " button", k, answers);
+      });
+      pickExclusive(root, "#q-which button", "which_better", answers);
+      var box = root.querySelector("#q-improve");
+      box.addEventListener("touchend", function (e) { e.stopPropagation(); });
+      root.querySelector("#q-save").addEventListener("click", function (e) {
+        e.stopPropagation();
+        answers.improve = box.value.trim();
+        session.survey = answers;
+        session.survey_at = Date.now();
+        showDone();
+      });
+    }
+  });
+}
+function scaleQ(key, title, read, low, high) {
+  var btns = "";
+  for (var i = 1; i <= 5; i++) btns += '<button type="button" data-v="' + i + '">' + i + "</button>";
+  return '<div class="q"><div class="ql">' + title + "</div><p class=\"read\">" + read + "</p>" +
+    '<div class="scale" id="q-' + key + '">' + btns + "</div>" +
+    '<div class="ends"><span>' + low + "</span><span>" + high + "</span></div></div>";
+}
+function showDone() {
   const scored = session.trials.filter(function (t) { return !t.phase; });
   const ok = scored.filter(function (t) { return t.success; }).length;
   const lines = scored.map(function (t) {
@@ -992,21 +1130,35 @@ function endSession() {
   });
   showGuide({
     kicker: "全部结束",
-    title: "谢谢，任务完成",
-    body: ["两段都做完了。共完成 " + ok + " / " + scored.length + " 题。", "主试可以下载记录。"].concat(lines),
-    say: "两段都做完了。一共做对" + ok + "题。谢谢。",
+    title: "谢谢，可以下载了",
+    body: ["问卷已记下。共完成 " + ok + " / " + scored.length + " 题。"].concat(lines),
+    say: "谢谢，题目和问卷都记下来了。",
     actions: [
       { label: "下载实验记录", run: downloadLog },
-      { label: "再听一遍结束说明", alt: 1, run: function () { speak("两段都做完了。一共做对" + ok + "题。谢谢。", GUIDE_RATE); } }
+      { label: "再听一遍结束说明", alt: 1, run: function () { speak("谢谢，题目和问卷都记下来了。", GUIDE_RATE); } }
     ]
   });
 }
 function downloadLog() {
+  const pid = session.participant_id || "x";
   const blob = new Blob([JSON.stringify(session, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "hierarchytone-" + Date.now() + ".json";
+  a.download = "hierarchytone-" + pid + "-" + Date.now() + ".json";
   a.click();
+  setTimeout(function () {
+    const scored = (session.trials || []).filter(function (t) { return !t.phase; });
+    const s = session.survey || {};
+    const head = ["pid", "vision", "sr_exp", "cond", "practice", "title", "success", "timeout", "time_s", "n_errors", "n_focus", "pitch_disc", "pitch_layer", "which_better", "effort_c0", "effort_c1", "improve"];
+    const rows = [head.join(",")].concat(scored.map(function (t) {
+      return [pid, session.vision || "", session.sr_exp || "", t.cond || "", t.practice ? 1 : 0, '"' + (t.title || "") + '"', t.success || 0, t.timeout || 0, Math.round((t.time_ms || 0) / 1000), t.n_errors || 0, t.n_focus || 0, s.pitch_disc || "", s.pitch_layer || "", s.which_better || "", s.effort_c0 || "", s.effort_c1 || "", '"' + String(s.improve || "").replace(/"/g, "'") + '"'].join(",");
+    }));
+    const csv = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const b = document.createElement("a");
+    b.href = URL.createObjectURL(csv);
+    b.download = "hierarchytone-" + pid + "-" + Date.now() + ".csv";
+    b.click();
+  }, 600);
 }
 function buildTrials() {
   const cart = { tid: "t-cart", title: "找到购物车", say: "请找到底部的购物车，找到以后在上面快速点两下。" };
@@ -1025,7 +1177,17 @@ function buildTrials() {
   ];
 }
 function startProtocol() {
-  session = { t0: Date.now(), order: "C0-C1", scene: "taobao", trials: [], events: [] };
+  session = {
+    t0: Date.now(),
+    order: "C0-C1",
+    scene: "taobao",
+    participant_id: sessionMeta.participant_id,
+    vision: sessionMeta.vision,
+    sr_exp: sessionMeta.sr_exp,
+    trials: [],
+    events: [],
+    survey: null
+  };
   trials = buildTrials();
   trialIndex = -1;
   nextTrial();
@@ -1149,12 +1311,12 @@ function runTut() {
     function () {
       showGuide({
         ghost: 1,
-        say: "请用两根手指上下滑，翻一翻页面。翻一下就会开始第一段实验。点屏幕开始翻。",
+        say: "请用两根手指上下滑，翻一翻页面。翻一下就会请研究助手填写编号。点屏幕开始翻。",
         next: function () { beginTry("pan", true, nextTut); }
       });
     }
   ];
-  if (tut >= steps.length) { startProtocol(); return; }
+  if (tut >= steps.length) { showIntake(); return; }
   steps[tut]();
 }
 function unlock() {
