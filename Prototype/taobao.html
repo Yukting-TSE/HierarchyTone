@@ -234,6 +234,34 @@
   }
   #gate small { display: block; margin-top: 14px; font-size: 18px; font-weight: 500; opacity: .7; }
   #gate .sub { display: block; margin-top: 8px; font-size: 16px; font-weight: 500; opacity: .55; }
+
+  #guide {
+    display: none; position: absolute; inset: 0; z-index: 10;
+    background: #111; color: #fff; padding: 36px 28px 28px;
+    box-sizing: border-box; overflow: auto; touch-action: none;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  #guide.show { display: flex; flex-direction: column; justify-content: center; }
+  #guide .k { font-size: 16px; letter-spacing: .08em; opacity: .55; margin-bottom: 10px; font-weight: 600; }
+  #guide h2 { font-size: 32px; line-height: 1.35; margin: 0 0 16px; font-weight: 800; }
+  #guide p { font-size: 22px; line-height: 1.6; margin: 0 0 14px; font-weight: 500; opacity: .95; }
+  #guide .hint { margin-top: 22px; font-size: 18px; opacity: .6; }
+  #guide .acts { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
+  #guide .acts button {
+    appearance: none; border: 0; border-radius: 14px; padding: 16px 18px;
+    font: 700 20px/1.3 -apple-system, "PingFang SC", sans-serif;
+    background: #ff5000; color: #fff;
+  }
+  #guide .acts button.alt { background: #333; }
+  #taskbar {
+    display: none; position: absolute; left: 0; right: 0; z-index: 7;
+    bottom: calc(52px + 44px + env(safe-area-inset-bottom));
+    padding: 8px 14px;
+    background: rgba(17,17,17,.9); color: #fff;
+    font-size: 17px; font-weight: 700; line-height: 1.35;
+    pointer-events: none;
+  }
+  #taskbar.show { display: block; }
 </style>
 </head>
 <body>
@@ -264,7 +292,7 @@
         <div class="sim-el scan" data-lv="0" data-sp="扫一扫，按钮">🔳</div>
         <div class="sim-el ph" data-lv="0" data-sp="搜索框，无印良品">无印良品</div>
         <div class="sim-el cam" data-lv="0" data-sp="拍照搜，按钮">📷</div>
-        <div class="sim-el go" data-lv="0" data-sp="搜索，按钮">搜索</div>
+        <div class="sim-el go" data-tid="t-search" data-lv="0" data-sp="搜索，按钮">搜索</div>
       </div>
     </div>
   </div>
@@ -336,9 +364,9 @@
       <div class="sim-el sk-more" data-lv="1" data-sp="更多秒杀，按钮">更多 ›</div>
     </div>
     <div class="sk-row" id="seckill">
-      <div class="sim-el sk-item" data-lv="2" data-sp="秒杀，无线耳机，十九元九">
+      <div class="sim-el sk-item" data-tid="t-seckill59" data-lv="2" data-sp="秒杀，无线耳机，五十九元">
         <div class="sim-el sk-img" data-lv="4" data-sp="图片，无线耳机" style="background:#eceff1">🎧</div>
-        <div class="sim-el sk-pr" data-lv="4" data-sp="十九元九">¥19.9</div>
+        <div class="sim-el sk-pr" data-lv="4" data-sp="五十九元">¥59</div>
         <div class="sim-el sk-was" data-lv="5" data-sp="原价一百二十九元">¥129</div>
       </div>
       <div class="sim-el sk-item" data-lv="2" data-sp="秒杀，保温杯，二十九元">
@@ -388,11 +416,13 @@
   <div class="sim-el nav on" data-lv="0" data-sp="淘宝，首页，已选中"><div class="n">淘</div>淘宝</div>
   <div class="sim-el nav" data-lv="0" data-sp="视频，按钮"><div class="n">▶</div>视频</div>
   <div class="sim-el nav" data-lv="0" data-sp="消息，九十九条未读，按钮"><div class="n">💬<span class="dot">99+</span></div>消息</div>
-  <div class="sim-el nav" data-lv="0" data-sp="购物车，按钮"><div class="n">🛒</div>购物车</div>
+  <div class="sim-el nav" data-tid="t-cart" data-lv="0" data-sp="购物车，按钮"><div class="n">🛒</div>购物车</div>
   <div class="sim-el nav" data-lv="0" data-sp="我的淘宝，按钮"><div class="n">😊</div>我的淘宝</div>
 </div>
+<div id="taskbar"></div>
 <div id="hit"></div>
-<button type="button" id="gate">点击屏幕开始<small>请先戴上耳机</small><span class="sub">单指滑动朗读 · 双指翻页</span></button>
+<div id="guide"></div>
+<button type="button" id="gate">点击屏幕开始<small>请先戴上耳机</small><span class="sub">先听使用说明，再做查找任务</span></button>
 <script>
 (function renderFeed() {
   const items = [
@@ -455,6 +485,9 @@ const icons = document.getElementById("icons");
 const seckill = document.getElementById("seckill");
 const hit = document.getElementById("hit");
 const gate = document.getElementById("gate");
+const guide = document.getElementById("guide");
+const taskbar = document.getElementById("taskbar");
+const TRIAL_MS = 90000;
 document.querySelectorAll(".sim-el").forEach(function (el, i) { el.dataset.id = "n" + i; });
 icons.addEventListener("scroll", function () {
   const w = icons.clientWidth || 1;
@@ -465,6 +498,7 @@ icons.addEventListener("scroll", function () {
 });
 
 let ctx = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
+let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -548,8 +582,17 @@ function explore(t) {
   if (cell.dataset.id === lastId) return;
   lastId = cell.dataset.id;
   speechSynthesis.cancel();
-  playTone(levelIndex(cell.dataset.lv));
-  setTimeout(function () { if (lastId === cell.dataset.id) speak(cell.dataset.sp); }, (DUR + DLY) * 1000);
+  if (trial) {
+    trial.n_focus += 1;
+    trial.levels[cell.dataset.lv] = 1;
+    session.events.push({ t: Date.now() - session.t0, type: "enter", id: cell.dataset.id, lv: cell.dataset.lv, sp: cell.dataset.sp });
+  }
+  if (pitchOn) {
+    playTone(levelIndex(cell.dataset.lv));
+    setTimeout(function () { if (lastId === cell.dataset.id) speak(cell.dataset.sp); }, (DUR + DLY) * 1000);
+  } else {
+    setTimeout(function () { if (lastId === cell.dataset.id) speak(cell.dataset.sp); }, 80);
+  }
 }
 function midpoint(touches) {
   let x = 0, y = 0;
@@ -582,10 +625,9 @@ function onTouchStart(e) {
   const now = Date.now();
   if (now - lastTap < 380 && lastId) {
     const cur = document.querySelector(".sim-el.on");
-    speechSynthesis.cancel();
-    playTone(cur ? levelIndex(cur.dataset.lv) : 0);
-    setTimeout(function () { speak("选中，" + (cur ? cur.dataset.sp : "")); }, (DUR + DLY) * 1000);
-    lastTap = 0; return;
+    lastTap = 0;
+    onActivate(cur);
+    return;
   }
   lastTap = now; explore(e.changedTouches[0]);
 }
@@ -607,16 +649,248 @@ function onTouchMove(e) {
   pan = null; explore(e.changedTouches[0]);
 }
 function onTouchEnd(e) { e.preventDefault(); if (e.touches.length < 2) pan = null; }
+function focusTid(el) {
+  if (!el) return "";
+  if (el.dataset.tid) return el.dataset.tid;
+  const p = el.closest("[data-tid]");
+  return p ? p.dataset.tid : "";
+}
+function hideGuide() {
+  guide.classList.remove("show");
+  guide.innerHTML = "";
+  guide.onclick = null;
+  guideHandler = null;
+}
+function showGuide(opt) {
+  ready = false;
+  hit.style.display = "none";
+  taskbar.classList.remove("show");
+  hideGuide();
+  guide.classList.add("show");
+  var html = "";
+  if (opt.kicker) html += '<div class="k">' + opt.kicker + "</div>";
+  if (opt.title) html += "<h2>" + opt.title + "</h2>";
+  (opt.body || []).forEach(function (p) { html += "<p>" + p + "</p>"; });
+  if (opt.hint) html += '<div class="hint">' + opt.hint + "</div>";
+  if (opt.actions) {
+    html += '<div class="acts">';
+    opt.actions.forEach(function (a, i) {
+      html += '<button type="button" class="' + (a.alt ? "alt" : "") + '" data-act="' + i + '">' + a.label + "</button>";
+    });
+    html += "</div>";
+  }
+  guide.innerHTML = html;
+  if (opt.say) speak(opt.say, GUIDE_RATE);
+  if (opt.actions) {
+    guide.querySelectorAll("[data-act]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        opt.actions[+btn.dataset.act].run();
+      });
+    });
+  } else {
+    guideHandler = opt.next || hideGuide;
+    guide.onclick = function () { if (guideHandler) guideHandler(); };
+  }
+}
+function bindHit() {
+  hit.style.display = "block";
+  if (hit.dataset.bound) return;
+  hit.dataset.bound = "1";
+  hit.addEventListener("touchstart", onTouchStart, { passive: false });
+  hit.addEventListener("touchmove", onTouchMove, { passive: false });
+  hit.addEventListener("touchend", onTouchEnd, { passive: false });
+  hit.addEventListener("touchcancel", onTouchEnd, { passive: false });
+  hit.addEventListener("mousemove", function (e) { if (armed && ready) explore(e); });
+}
+function onActivate(cur) {
+  speechSynthesis.cancel();
+  if (!trial) {
+    if (pitchOn) playTone(cur ? levelIndex(cur.dataset.lv) : 0);
+    setTimeout(function () { speak("选中，" + (cur ? cur.dataset.sp : "")); }, pitchOn ? (DUR + DLY) * 1000 : 80);
+    return;
+  }
+  const tid = focusTid(cur);
+  session.events.push({ t: Date.now() - session.t0, type: "activate", id: cur ? cur.dataset.id : "", tid: tid, sp: cur ? cur.dataset.sp : "" });
+  if (tid && tid === trial.tid) {
+    finishTrial("success");
+    return;
+  }
+  trial.n_errors += 1;
+  if (pitchOn && cur) playTone(levelIndex(cur.dataset.lv));
+  speak("不对，请继续找", GUIDE_RATE);
+}
+function finishTrial(result) {
+  if (!trial) return;
+  clearTimeout(trialTimer);
+  trial.result = result;
+  trial.time_ms = Date.now() - trial.t0;
+  trial.timeout = result === "timeout" ? 1 : 0;
+  trial.success = result === "success" ? 1 : 0;
+  session.trials.push(trial);
+  ready = false;
+  lastId = null;
+  trial = null;
+  taskbar.classList.remove("show");
+  if (result === "success") speak("正确", GUIDE_RATE);
+  else if (result === "timeout") speak("时间到", GUIDE_RATE);
+  setTimeout(function () { nextTrial(); }, result === "success" ? 900 : 1100);
+}
+function announceTrial() {
+  const kind = trial.practice ? "练习" : ("正式第" + trialIndex + "题，共4题");
+  const condTxt = trial.cond === "C1" ? "这一题会先听到音高，再听到名称。" : "这一题只有语音，没有音高。";
+  showGuide({
+    kicker: kind + " · " + (trial.cond === "C1" ? "音高加语音" : "仅语音"),
+    title: trial.title,
+    body: [trial.say, condTxt, "找到后在目标上快速点两下。点错了会提示不对，可以继续找。"],
+    hint: "点屏幕开始本题",
+    say: kind + "。" + trial.say + condTxt + "找到后快速点两下。",
+    next: startTrial
+  });
+}
+function startTrial() {
+  if (!trial || ready) return;
+  hideGuide();
+  pitchOn = trial.cond === "C1";
+  trial.t0 = Date.now();
+  trial.n_focus = 0;
+  trial.n_errors = 0;
+  trial.levels = {};
+  taskbar.textContent = (trial.practice ? "练习：" : "") + trial.title;
+  taskbar.classList.add("show");
+  bindHit();
+  ready = true;
+  clearTimeout(trialTimer);
+  trialTimer = setTimeout(function () { finishTrial("timeout"); }, TRIAL_MS);
+}
+function nextTrial() {
+  trialIndex += 1;
+  if (trialIndex >= trials.length) { endSession(); return; }
+  trial = trials[trialIndex];
+  announceTrial();
+}
+function endSession() {
+  ready = false;
+  hit.style.display = "none";
+  taskbar.classList.remove("show");
+  const ok = session.trials.filter(function (t) { return t.success; }).length;
+  const lines = session.trials.map(function (t, i) {
+    return (t.practice ? "练习" : ("正式" + i)) + " " + t.title + "，" + (t.success ? "成功" : (t.timeout ? "超时" : "未完成")) + "，用时" + Math.round((t.time_ms || 0) / 1000) + "秒，点错" + t.n_errors + "次";
+  });
+  showGuide({
+    kicker: "结束",
+    title: "任务完成",
+    body: ["共完成 " + ok + " / " + session.trials.length + " 题。", "主试可以下载记录。"].concat(lines),
+    say: "任务完成。一共做对" + ok + "题。谢谢。",
+    actions: [
+      { label: "下载实验记录", run: downloadLog },
+      { label: "再听一遍结束说明", alt: 1, run: function () { speak("任务完成。一共做对" + ok + "题。谢谢。", GUIDE_RATE); } }
+    ]
+  });
+}
+function downloadLog() {
+  const blob = new Blob([JSON.stringify(session, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "hierarchytone-" + Date.now() + ".json";
+  a.click();
+}
+function buildTrials(first) {
+  const second = first === "C1" ? "C0" : "C1";
+  const cart = { tid: "t-cart", title: "找到购物车", say: "请找到底部的购物车，找到以后在上面快速点两下。" };
+  const ear = { tid: "t-seckill59", title: "找到五十九元的秒杀耳机", say: "请找到限时秒杀里，标价五十九元的无线耳机，找到以后快速点两下。耳机在秒杀横条里，可能需要双指向右滑。" };
+  return [
+    { practice: 1, cond: "C1", tid: "t-search", title: "练习：找到搜索按钮", say: "先做一题练习。请找到橙色的搜索按钮，找到以后快速点两下。" },
+    Object.assign({ cond: first }, cart),
+    Object.assign({ cond: first }, ear),
+    Object.assign({ cond: second }, cart),
+    Object.assign({ cond: second }, ear)
+  ];
+}
+function startProtocol(first) {
+  session = { t0: Date.now(), order: first, scene: "taobao", trials: [], events: [] };
+  trials = buildTrials(first);
+  trialIndex = -1;
+  hideGuide();
+  calibrate();
+}
 function calibrate() {
-  speak("请戴上耳机。先听六种音高，从高到低", GUIDE_RATE);
-  const start = 2600, gap = 640;
+  showGuide({
+    kicker: "音高校准",
+    title: "先听六种音高",
+    body: ["请戴好耳机。接下来从高到低播放六个音。", "音越高，越靠界面上面一层，比如导航和底部标签。音越低，越在更里面，比如图片、价格和优惠。", "听完不要滑动，等提示开始练习。"],
+    hint: "请听完六个音，不要滑动",
+    say: "请戴好耳机。先听六种音高，从高到低。音越高越靠上一层。",
+    next: function () {}
+  });
+  const start = 2800, gap = 640;
   for (let i = 0; i < 6; i++) {
     setTimeout(function () { playTone(i); }, start + i * gap);
   }
-  setTimeout(function () {
-    speak("可以开始。音越高，越靠上一层", GUIDE_RATE);
-    ready = true;
-  }, start + 6 * gap + 180);
+  setTimeout(function () { nextTrial(); }, start + 6 * gap + 400);
+}
+const HELP = [
+  {
+    kicker: "说明 1 / 6",
+    title: "这是实验页，不是真的淘宝",
+    body: ["页面看起来像购物软件，但商品和价格都是实验用的。", "请戴上耳机，把声音开到舒服的大小。", "下面会先讲怎么用，再听音高，然后做查找题。"],
+    say: "这是实验页，不是真的淘宝。请戴上耳机。下面先讲怎么用，再做查找题。点屏幕继续。"
+  },
+  {
+    kicker: "说明 2 / 6",
+    title: "单指滑动，指到哪里读哪里",
+    body: ["请用一根手指按在屏幕上慢慢滑。", "手指指到哪个按钮、标题或价格，就会先听到一声高低不同的音，再听到它的名称。", "换到下一项时，上一项会停掉。不用点按，也不用记快捷键。"],
+    say: "请用一根手指在屏幕上慢慢滑。指到哪里就读哪里。先听到音高，再听到名称。点屏幕继续。"
+  },
+  {
+    kicker: "说明 3 / 6",
+    title: "双指可以翻页",
+    body: ["两根手指一起上下滑，页面会上下移动。", "两根手指在顶部频道上左右滑，可以滑过关注、推荐、闪购这些频道。", "在秒杀商品横条上左右滑，可以听到更多秒杀商品。"],
+    say: "两根手指上下滑可以翻页。在频道或秒杀横条上左右滑，可以听到更多项目。点屏幕继续。"
+  },
+  {
+    kicker: "说明 4 / 6",
+    title: "快速点两下表示选中",
+    body: ["找到要找的东西以后，手指停在它上面，快速点两下。", "点对了会说正确。点错了会说不对，可以继续找，不会立刻结束。", "每一题大约有一分半钟。找不到就等到时间结束。"],
+    say: "找到目标后，在上面快速点两下。点对了会说正确，点错了可以继续找。每题大约一分半钟。点屏幕继续。"
+  },
+  {
+    kicker: "说明 5 / 6",
+    title: "音越高，越靠上一层",
+    body: ["高音表示你在比较靠外的一层，比如顶部频道、搜索、底部淘宝、购物车。", "中间的音多半是一块区域或一张商品卡。", "低音表示更里面的信息，比如图片、价格、优惠和收藏人数。", "有的题目会关掉音高，只保留语音，方便比较。"],
+    say: "音越高越靠上一层，比如导航和购物车。音越低越在里面，比如图片和价格。有的题会关掉音高。点屏幕继续。"
+  },
+  {
+    kicker: "说明 6 / 6",
+    title: "接下来做什么",
+    body: ["先听六个从高到低的音。", "然后做一题练习：找到搜索按钮。", "正式题要找两次购物车，两次五十九元的秒杀耳机。一半题目有音高，一半只有语音。", "请主试选择先做哪一种。"],
+    say: "先听六个音，再练习找搜索按钮。正式题要找购物车，和五十九元的秒杀耳机。请主试选择先听音高，还是先只听语音。"
+  }
+];
+let helpIndex = 0;
+function showHelp() {
+  if (helpIndex >= HELP.length) {
+    showGuide({
+      kicker: "主试",
+      title: "选择开始顺序",
+      body: ["请主试点下面其中一个。被试不用记这个选择。", "两种顺序里，题目相同，只是音高开和关的先后不同。"],
+      say: "请主试选择。先做有音高的题目，还是先做只有语音的题目。",
+      actions: [
+        { label: "先音高，再只听语音", run: function () { startProtocol("C1"); } },
+        { label: "先只听语音，再音高", alt: 1, run: function () { startProtocol("C0"); } }
+      ]
+    });
+    return;
+  }
+  const pageHelp = HELP[helpIndex];
+  showGuide({
+    kicker: pageHelp.kicker,
+    title: pageHelp.title,
+    body: pageHelp.body,
+    hint: "点屏幕听下一页",
+    say: pageHelp.say,
+    next: function () { helpIndex += 1; showHelp(); }
+  });
 }
 function unlock() {
   if (armed) return;
@@ -626,13 +900,9 @@ function unlock() {
   armed = true;
   mandarinVoice = pickMandarinVoice();
   ensureAudio();
-  gate.remove(); hit.style.display = "block";
-  hit.addEventListener("touchstart", onTouchStart, { passive: false });
-  hit.addEventListener("touchmove", onTouchMove, { passive: false });
-  hit.addEventListener("touchend", onTouchEnd, { passive: false });
-  hit.addEventListener("touchcancel", onTouchEnd, { passive: false });
-  hit.addEventListener("mousemove", function (e) { if (armed && ready) explore(e); });
-  calibrate();
+  gate.remove();
+  helpIndex = 0;
+  showHelp();
 }
 gate.addEventListener("click", unlock);
 </script>
