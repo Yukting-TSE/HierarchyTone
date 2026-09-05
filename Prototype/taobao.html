@@ -28,11 +28,15 @@
   .head {
     background: #fff;
     padding: calc(6px + env(safe-area-inset-top)) 0 10px;
+    position: sticky; top: 0; z-index: 3;
   }
   .tabs {
-    display: flex; gap: 16px; padding: 4px 14px 8px;
-    overflow: hidden; white-space: nowrap; align-items: flex-end;
+    display: flex; gap: 14px; padding: 6px 14px 10px;
+    overflow-x: auto; overflow-y: hidden; white-space: nowrap;
+    align-items: flex-end; touch-action: none;
+    -webkit-overflow-scrolling: auto;
   }
+  .tabs::-webkit-scrollbar { display: none; }
   .tab { font-size: 15px; color: #333; padding: 4px 0 6px; flex-shrink: 0; }
   .tab.on {
     color: #ff5000; font-size: 20px; font-weight: 800;
@@ -173,13 +177,25 @@
 <body>
 <div id="page">
   <div class="head">
-    <div class="tabs">
+    <div class="tabs" id="tabs">
       <div class="sim-el tab" data-lv="0" data-sp="关注，频道">关注</div>
       <div class="sim-el tab on" data-lv="0" data-sp="推荐，频道，已选中">推荐</div>
       <div class="sim-el tab" data-lv="0" data-sp="闪购，频道">闪购</div>
       <div class="sim-el tab" data-lv="0" data-sp="国补，频道">国补</div>
       <div class="sim-el tab" data-lv="0" data-sp="穿搭，频道">穿搭</div>
       <div class="sim-el tab" data-lv="0" data-sp="飞猪，频道">飞猪</div>
+      <div class="sim-el tab" data-lv="0" data-sp="超级立减，频道">超级立减</div>
+      <div class="sim-el tab" data-lv="0" data-sp="居家，频道">居家</div>
+      <div class="sim-el tab" data-lv="0" data-sp="美食，频道">美食</div>
+      <div class="sim-el tab" data-lv="0" data-sp="美妆，频道">美妆</div>
+      <div class="sim-el tab" data-lv="0" data-sp="母婴，频道">母婴</div>
+      <div class="sim-el tab" data-lv="0" data-sp="户外，频道">户外</div>
+      <div class="sim-el tab" data-lv="0" data-sp="运动，频道">运动</div>
+      <div class="sim-el tab" data-lv="0" data-sp="奢品，频道">奢品</div>
+      <div class="sim-el tab" data-lv="0" data-sp="新品，频道">新品</div>
+      <div class="sim-el tab" data-lv="0" data-sp="数码，频道">数码</div>
+      <div class="sim-el tab" data-lv="0" data-sp="百亿加补，频道">百亿加补</div>
+      <div class="sim-el tab" data-lv="0" data-sp="汽车，频道">汽车</div>
     </div>
     <div class="search-wrap">
       <div class="search">
@@ -325,11 +341,12 @@ const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
 const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.15;
 const SPEECH_RATE = 4, SPEECH_VOL = 0.8;
 const page = document.getElementById("page");
+const tabs = document.getElementById("tabs");
 const hit = document.getElementById("hit");
 const gate = document.getElementById("gate");
 document.querySelectorAll(".sim-el").forEach(function (el, i) { el.dataset.id = "n" + i; });
 
-let ctx = null, lastId = null, lastTap = 0, armed = false, panY = null, mandarinVoice = null;
+let ctx = null, lastId = null, lastTap = 0, armed = false, pan = null, mandarinVoice = null;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -403,12 +420,17 @@ function explore(t) {
   playTone(levelIndex(cell.dataset.lv));
   setTimeout(function () { if (lastId === cell.dataset.id) speak(cell.dataset.sp); }, (DUR + DLY) * 1000);
 }
-function midpointY(touches) {
-  let y = 0; for (let i = 0; i < touches.length; i++) y += touches[i].clientY; return y / touches.length;
+function midpoint(touches) {
+  let x = 0, y = 0;
+  for (let i = 0; i < touches.length; i++) {
+    x += touches[i].clientX;
+    y += touches[i].clientY;
+  }
+  return { x: x / touches.length, y: y / touches.length };
 }
 function onTouchStart(e) {
   e.preventDefault();
-  if (e.touches.length >= 2) { panY = midpointY(e.touches); speechSynthesis.cancel(); return; }
+  if (e.touches.length >= 2) { pan = midpoint(e.touches); speechSynthesis.cancel(); return; }
   const now = Date.now();
   if (now - lastTap < 380 && lastId) {
     const cur = document.querySelector(".sim-el.on");
@@ -422,13 +444,17 @@ function onTouchStart(e) {
 function onTouchMove(e) {
   e.preventDefault();
   if (e.touches.length >= 2) {
-    const y = midpointY(e.touches);
-    if (panY != null) page.scrollTop += panY - y;
-    panY = y; return;
+    const p = midpoint(e.touches);
+    if (pan) {
+      page.scrollTop += pan.y - p.y;
+      tabs.scrollLeft += pan.x - p.x;
+    }
+    pan = p;
+    return;
   }
-  panY = null; explore(e.changedTouches[0]);
+  pan = null; explore(e.changedTouches[0]);
 }
-function onTouchEnd(e) { e.preventDefault(); if (e.touches.length < 2) panY = null; }
+function onTouchEnd(e) { e.preventDefault(); if (e.touches.length < 2) pan = null; }
 function unlock() {
   if (armed) return;
   if (/MicroMessenger|DingTalk/i.test(navigator.userAgent)) {
