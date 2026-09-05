@@ -324,8 +324,10 @@
       <h3>受试者信息</h3>
       <div class="input-row">
         <label>编号</label>
-        <input type="text" id="subjectId" placeholder="如 P01" value="P01">
+        <input type="text" id="subjectId" placeholder="必填，如 P01" autocomplete="off">
       </div>
+      <div class="hint-text" id="sessionHint">请先填写编号。换人必须点「下一被试」，不要只改编号。</div>
+      <button class="action-btn btn-secondary" style="margin-top:8px" onclick="nextParticipant()">下一被试（新场次）</button>
     </div>
 
     <div class="panel-section">
@@ -433,12 +435,13 @@
       <h3>📋 事件日志</h3>
       <div class="log-box" id="logBox"></div>
     </div>
-    <button class="action-btn btn-secondary" onclick="exportData()">💾 导出全部历史数据</button>
+    <button class="action-btn btn-secondary" onclick="exportData()">💾 导出本场 JSON + CSV</button>
+    <button class="action-btn btn-secondary" style="margin-top:8px;" onclick="exportArchive()">💾 导出本机全部场次</button>
   </div>
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.3</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.4</span>
   <span id="audioStatus">🔊 Web Audio API 就绪</span>
 </div>
 
@@ -602,10 +605,188 @@ let state = {
   lastWasError: false,
   visitedCells: new Set(),
   eventLog: [],
-  currentTrial: null, // 当前进行/刚完成的试次数据
-  trialCounter: { 1: 0, 2: 0, 3: 0 }, // 各条件已完成次数
-  allTrials: []
+  currentTrial: null,
+  trialCounter: { 1: 0, 2: 0, 3: 0 },
+  allTrials: [],
+  sessionId: null,
+  participantId: '',
+  sessionStartedAt: 0,
+  trialStartedAt: 0,
+  trialStartedPerf: 0
 };
+
+const STORE_CURRENT = 'exp1-current-session';
+const STORE_ARCHIVE = 'exp1-archive';
+
+function isoNow(ms) {
+  return new Date(ms || Date.now()).toISOString();
+}
+function newSessionId() {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+}
+function getPid() {
+  return (document.getElementById('subjectId').value || '').trim();
+}
+function csvCell(v) {
+  const s = String(v == null ? '' : v);
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+function lockPid(lock) {
+  const el = document.getElementById('subjectId');
+  el.readOnly = !!lock;
+  el.style.background = lock ? '#EDF2F7' : '#fff';
+}
+function updateSessionHint() {
+  const el = document.getElementById('sessionHint');
+  if (!el) return;
+  if (!state.sessionId) {
+    el.textContent = '请先填写编号。换人必须点「下一被试」，不要只改输入框。';
+    return;
+  }
+  el.textContent = '本场 ' + (state.participantId || getPid()) + ' · ' + state.allTrials.length + ' 个试次 · 场次 ' + state.sessionId;
+}
+function persistSession() {
+  if (!state.sessionId) return;
+  const rec = {
+    session_id: state.sessionId,
+    participant_id: state.participantId || getPid(),
+    started_at: state.sessionStartedAt ? isoNow(state.sessionStartedAt) : isoNow(),
+    trials: state.allTrials
+  };
+  try { sessionStorage.setItem(STORE_CURRENT, JSON.stringify(rec)); } catch (err) {}
+  try {
+    const all = JSON.parse(localStorage.getItem(STORE_ARCHIVE) || '{}');
+    all[state.sessionId] = rec;
+    localStorage.setItem(STORE_ARCHIVE, JSON.stringify(all));
+  } catch (err) {}
+  updateSessionHint();
+}
+function ensureSession() {
+  const pid = getPid();
+  if (!pid) return false;
+  if (state.sessionId && state.participantId && pid !== state.participantId) {
+    alert('本场已绑定 ' + state.participantId + '。换人请点「下一被试」。');
+    document.getElementById('subjectId').value = state.participantId;
+    return false;
+  }
+  if (!state.sessionId) {
+    state.sessionId = newSessionId();
+    state.participantId = pid;
+    state.sessionStartedAt = Date.now();
+    state.trialCounter = { 1: 0, 2: 0, 3: 0 };
+    state.allTrials = [];
+    lockPid(true);
+    persistSession();
+    addLog('system', '新场次 ' + state.sessionId + ' · 被试 ' + pid);
+  }
+  return true;
+}
+function nextParticipant() {
+  persistSession();
+  if (state.allTrials.length) {
+    if (!confirm('开始下一被试？本场 ' + (state.participantId || '') + ' 的 ' + state.allTrials.length + ' 个试次会留在本机，页面将刷新。')) return;
+  }
+  try { sessionStorage.removeItem(STORE_CURRENT); } catch (err) {}
+  location.reload();
+}
+function restoreSession() {
+  try {
+    const raw = sessionStorage.getItem(STORE_CURRENT);
+    if (!raw) return;
+    const rec = JSON.parse(raw);
+    if (!rec.session_id || !Array.isArray(rec.trials)) return;
+    state.sessionId = rec.session_id;
+    state.participantId = rec.participant_id || '';
+    state.allTrials = rec.trials;
+    state.trialCounter = { 1: 0, 2: 0, 3: 0 };
+    rec.trials.forEach(function (t) {
+      const c = t.condition;
+      if (state.trialCounter[c] != null) state.trialCounter[c] = Math.max(state.trialCounter[c], t.trialNumber || 0);
+    });
+    if (state.participantId) {
+      document.getElementById('subjectId').value = state.participantId;
+      lockPid(true);
+    }
+    updateSessionHint();
+    addLog('system', '已恢复本场 ' + state.participantId + ' · ' + state.allTrials.length + ' 个试次');
+  } catch (err) {}
+}
+function snapshotTrial(endedAt, perfEnd) {
+  const startedAt = state.trialStartedAt || endedAt;
+  const perfStart = state.trialStartedPerf || state.startTime;
+  const timeMs = Math.max(0, Math.round(perfEnd - perfStart));
+  const pid = state.participantId || getPid();
+  return {
+    participant_id: pid,
+    subjectId: pid,
+    session_id: state.sessionId,
+    condition: state.condition,
+    trialNumber: state.trialCounter[state.condition],
+    difficulty: state.difficulty,
+    pathLength: Math.max(0, state.path.length - 1),
+    path: state.path.map(function (p) { return { r: p.r, c: p.c }; }),
+    totalMoves: state.totalMoves,
+    errors: state.errorCount,
+    errorRate: state.totalMoves > 0 ? state.errorCount / state.totalMoves : 0,
+    corrections: state.corrections,
+    correctionRate: state.errorCount > 0 ? state.corrections / state.errorCount : null,
+    started_at: isoNow(startedAt),
+    ended_at: isoNow(endedAt),
+    t0_ms: startedAt,
+    ended_ms: endedAt,
+    time_ms: timeMs,
+    time: timeMs / 1000,
+    timestamp: isoNow(endedAt),
+    log: JSON.parse(JSON.stringify(state.eventLog)),
+    tlx: null,
+    tlx_status: 'pending'
+  };
+}
+const CSV_HEAD = ['participant_id','session_id','condition','trialNumber','difficulty','pathLength','totalMoves','errors','errorRate','corrections','correctionRate','started_at','ended_at','time_ms','time_s','timestamp','tlx_mental','tlx_physical','tlx_temporal','tlx_performance','tlx_effort','tlx_frustration','tlx_mean','tlx_status'];
+function trialToCsvRow(t) {
+  const tlx = (t.tlx && !t.tlx.skipped) ? t.tlx : {};
+  const status = t.tlx_status || (t.tlx && t.tlx.skipped ? 'skipped' : (t.tlx ? 'filled' : 'pending'));
+  return [
+    csvCell(t.participant_id || t.subjectId || ''),
+    csvCell(t.session_id || ''),
+    t.condition,
+    t.trialNumber,
+    csvCell(t.difficulty || ''),
+    t.pathLength,
+    t.totalMoves,
+    t.errors,
+    t.errorRate == null ? '' : t.errorRate,
+    t.corrections,
+    t.correctionRate == null ? '' : t.correctionRate,
+    csvCell(t.started_at || ''),
+    csvCell(t.ended_at || t.timestamp || ''),
+    t.time_ms == null ? '' : t.time_ms,
+    t.time == null ? '' : Number(t.time).toFixed(3),
+    csvCell(t.timestamp || t.ended_at || ''),
+    tlx.mental != null ? tlx.mental : '',
+    tlx.physical != null ? tlx.physical : '',
+    tlx.temporal != null ? tlx.temporal : '',
+    tlx.performance != null ? tlx.performance : '',
+    tlx.effort != null ? tlx.effort : '',
+    tlx.frustration != null ? tlx.frustration : '',
+    tlx.mean != null ? tlx.mean : '',
+    csvCell(status)
+  ].join(',');
+}
+function trialsToCsv(trials) {
+  return '\ufeff' + [CSV_HEAD.join(',')].concat(trials.map(trialToCsvRow)).join('\n');
+}
 
 // ============================================================
 //  旋律 L3 编码
@@ -892,6 +1073,12 @@ function findNodeInPath(r, c) {
 // ============================================================
 async function startTask() {
   if (state.phase !== 'idle') return;
+  if (!getPid()) {
+    alert('请先填写被试编号，再开始任务。');
+    document.getElementById('subjectId').focus();
+    return;
+  }
+  if (!ensureSession()) return;
   ensureAudio();
 
   state.path = getRandomPath();
@@ -945,6 +1132,8 @@ async function startTask() {
   refreshGrid();
 
   state.startTime = performance.now();
+  state.trialStartedPerf = state.startTime;
+  state.trialStartedAt = Date.now();
   state.timerInterval = setInterval(() => {
     state.elapsed = (performance.now() - state.startTime) / 1000;
     document.getElementById('timerDisplay').textContent = state.elapsed.toFixed(1) + 's';
@@ -957,42 +1146,26 @@ async function startTask() {
 function endTask() {
   state.phase = 'done';
   clearInterval(state.timerInterval);
-  state.elapsed = (performance.now() - state.startTime) / 1000;
+  const endedAt = Date.now();
+  const perfEnd = performance.now();
+  state.elapsed = (perfEnd - (state.trialStartedPerf || state.startTime)) / 1000;
 
   document.getElementById('btnStart').disabled = false;
   document.getElementById('statusDot').className = 'status-dot dot-done';
   document.getElementById('statusText').textContent = '任务完成';
 
-  // 生成本次试次数据
   state.trialCounter[state.condition]++;
-  const trial = {
-    subjectId: document.getElementById('subjectId').value || 'P00',
-    condition: state.condition,
-    trialNumber: state.trialCounter[state.condition],
-    difficulty: state.difficulty,
-    pathLength: state.path.length - 1,
-    path: state.path,
-    totalMoves: state.totalMoves,
-    errors: state.errorCount,
-    errorRate: state.totalMoves > 0 ? (state.errorCount / state.totalMoves) : 0,
-    corrections: state.corrections,
-    correctionRate: state.errorCount > 0 ? (state.corrections / state.errorCount) : null,
-    time: state.elapsed,
-    timestamp: new Date().toISOString(),
-    log: [...state.eventLog],
-    tlx: null  // 待用户填写后写入
-  };
+  const trial = snapshotTrial(endedAt, perfEnd);
   state.currentTrial = trial;
   state.allTrials.push(trial);
+  persistSession();
 
-  addLog('system', `任务完成！用时 ${state.elapsed.toFixed(1)}s · 错误率 ${(trial.errorRate*100).toFixed(1)}%`);
+  addLog('system', `任务完成！用时 ${(trial.time).toFixed(1)}s · 错误率 ${(trial.errorRate*100).toFixed(1)}%`);
 
-  // 自动保存（无TLX的初版）
   const filename = autoSaveTrial(trial);
   trial._savedFilename = filename;
 
-  // 显示结果弹窗
-  document.getElementById('resultTime').textContent = state.elapsed.toFixed(1);
+  document.getElementById('resultTime').textContent = trial.time.toFixed(1);
   document.getElementById('resultErrorRate').textContent = (trial.errorRate*100).toFixed(1)+'%';
   document.getElementById('resultCorrRate').textContent = trial.correctionRate !== null
     ? (trial.correctionRate*100).toFixed(1)+'%' : 'N/A';
@@ -1010,14 +1183,13 @@ function endTask() {
 
 function proceedToTLX() {
   document.getElementById('resultModal').classList.remove('show');
-  // 重置滑块到默认值
+  const t = state.currentTrial;
+  if (!t) return;
   const defaults = { mental:50, physical:20, temporal:50, performance:50, effort:50, frustration:50 };
-  Object.entries(defaults).forEach(([k,v]) => {
+  Object.entries(defaults).forEach(function ([k,v]) {
     document.getElementById('tlx_'+k).value = v;
     document.getElementById('score_'+k).textContent = v;
   });
-  // 更新badge
-  const t = state.currentTrial;
   document.getElementById('tlxBadge').textContent =
     `条件 C${t.condition} · ${t.difficulty==='simple'?'简单路径':'复杂路径'} · 第 ${t.trialNumber} 次`;
   document.getElementById('tlxModal').classList.add('show');
@@ -1058,38 +1230,18 @@ function formatTimestamp(date) {
   return `${date.getFullYear()}${pad(date.getMonth()+1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
+function trialFilePrefix(trial) {
+  return 'exp1-' + (trial.participant_id || trial.subjectId || 'P00') + '-' + (trial.session_id || 's') + '-C' + trial.condition + '-' + trial.trialNumber;
+}
 function autoSaveTrial(trial) {
-  // 命名格式: C{cond}-{number}-{time}.json
-  const timeStr = formatTimestamp(new Date());
-  const filename = `C${trial.condition}-${trial.trialNumber}-${timeStr}.json`;
-
-  const blob = new Blob([JSON.stringify(trial, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 1000);
-
+  const filename = trialFilePrefix(trial) + '-' + formatTimestamp(new Date()) + '.json';
+  downloadBlob(filename, new Blob([JSON.stringify(trial, null, 2)], { type: 'application/json' }));
   addLog('save', `💾 已自动保存：${filename}`);
   return filename;
 }
-
 function autoSaveTrialWithTLX(trial) {
-  // 提交TLX后再次保存（含完整数据）
-  const timeStr = formatTimestamp(new Date());
-  const filename = `C${trial.condition}-${trial.trialNumber}-${timeStr}-with-TLX.json`;
-
-  const blob = new Blob([JSON.stringify(trial, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 1000);
-
+  const filename = trialFilePrefix(trial) + '-' + formatTimestamp(new Date()) + '-with-TLX.json';
+  downloadBlob(filename, new Blob([JSON.stringify(trial, null, 2)], { type: 'application/json' }));
   addLog('save', `💾 含TLX完整数据已保存：${filename}`);
   return filename;
 }
@@ -1262,7 +1414,9 @@ function submitTLX() {
 
   if (state.currentTrial) {
     state.currentTrial.tlx = sc;
+    state.currentTrial.tlx_status = 'filled';
     addLog('system', `NASA-TLX 已提交 — 平均负荷 ${sc.mean}`);
+    persistSession();
     autoSaveTrialWithTLX(state.currentTrial);
   }
   document.getElementById('tlxModal').classList.remove('show');
@@ -1271,6 +1425,8 @@ function submitTLX() {
 function skipTLX() {
   if (state.currentTrial) {
     state.currentTrial.tlx = { skipped: true };
+    state.currentTrial.tlx_status = 'skipped';
+    persistSession();
     addLog('system', 'NASA-TLX 评估已跳过');
   }
   document.getElementById('tlxModal').classList.remove('show');
@@ -1279,21 +1435,55 @@ function skipTLX() {
 // ============================================================
 //  数据导出（全部历史）
 // ============================================================
+function sessionFilePrefix() {
+  return 'exp1-' + (state.participantId || getPid() || 'P00') + '-' + (state.sessionId || 's');
+}
 function exportData() {
+  persistSession();
+  if (!state.allTrials.length) {
+    alert('本场还没有试次。请先做完至少一题再导出。');
+    return;
+  }
+  const pid = state.participantId || getPid();
   const d = {
-    exportTime: new Date().toISOString(),
-    subjectId: document.getElementById('subjectId').value || 'P00',
+    exportTime: isoNow(),
+    participant_id: pid,
+    session_id: state.sessionId,
     totalTrials: state.allTrials.length,
     trials: state.allTrials
   };
-  const blob = new Blob([JSON.stringify(d,null,2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url;
-  const sid = (document.getElementById('subjectId').value || 'P00').trim();
-  a.download = `${sid}-AllTrials-${formatTimestamp(new Date())}.json`;
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(url), 1000);
-  addLog('save', `💾 全部历史数据已导出 (${state.allTrials.length} 个试次)`);
+  const stamp = formatTimestamp(new Date());
+  const prefix = sessionFilePrefix();
+  downloadBlob(prefix + '-AllTrials-' + stamp + '.json', new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' }));
+  setTimeout(function () {
+    downloadBlob(prefix + '-AllTrials-' + stamp + '.csv', new Blob([trialsToCsv(state.allTrials)], { type: 'text/csv;charset=utf-8' }));
+  }, 500);
+  addLog('save', '本场已导出 JSON + CSV（' + state.allTrials.length + ' 个试次，编号 ' + pid + '）');
+}
+function exportArchive() {
+  persistSession();
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(STORE_ARCHIVE) || '{}'); } catch (err) { all = {}; }
+  const sessions = Object.keys(all).map(function (k) { return all[k]; }).filter(function (s) { return s && Array.isArray(s.trials); });
+  const trials = [];
+  sessions.forEach(function (s) {
+    s.trials.forEach(function (t) {
+      const row = Object.assign({}, t);
+      if (!row.participant_id && s.participant_id) row.participant_id = s.participant_id;
+      if (!row.session_id && s.session_id) row.session_id = s.session_id;
+      trials.push(row);
+    });
+  });
+  if (!trials.length) {
+    alert('本机还没有存下场次。');
+    return;
+  }
+  const stamp = formatTimestamp(new Date());
+  downloadBlob('exp1-archive-' + stamp + '.json', new Blob([JSON.stringify({ exportTime: isoNow(), sessions: sessions }, null, 2)], { type: 'application/json' }));
+  setTimeout(function () {
+    downloadBlob('exp1-archive-' + stamp + '.csv', new Blob([trialsToCsv(trials)], { type: 'text/csv;charset=utf-8' }));
+  }, 500);
+  addLog('save', '本机全部场次已导出（' + trials.length + ' 个试次）');
 }
 
 // ============================================================
@@ -1305,11 +1495,19 @@ function updateClock() {
 }
 setInterval(updateClock,1000); updateClock();
 buildGrid(); refreshGrid();
-addLog('system','系统初始化完成 v1.3');
+restoreSession();
+updateSessionHint();
+document.getElementById('subjectId').addEventListener('change', function () {
+  if (state.sessionId && state.participantId && getPid() !== state.participantId) {
+    alert('本场已绑定 ' + state.participantId + '。换人请点「下一被试」，不要只改编号。');
+    this.value = state.participantId;
+  }
+});
+addLog('system','系统初始化完成 v1.4');
+addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
+addLog('info','• 导出本场 CSV 含开始/结束时间和毫秒用时，缺 TLX 也保留空列');
 addLog('info','• 条件2/3 任务前播放 3 遍路径旋律预听');
-addLog('info','• 条件3 误差噪声音量已显著增强');
-addLog('info','• 任务完成自动弹出 NASA-TLX 评估');
-addLog('info','• 每次任务完成自动下载数据文件 (C{cond}-{number}-{time}.json)');
+addLog('info','• 每次任务完成自动下载该试次 JSON，结束时再导出本场 CSV');
 </script>
 </body>
 </html>
