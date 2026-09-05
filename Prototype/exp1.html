@@ -361,7 +361,6 @@
     <div class="panel-section">
       <h3>任务控制</h3>
       <button class="action-btn btn-primary" id="btnStart" onclick="startTask()">▶ 开始任务</button>
-      <button class="action-btn btn-secondary" onclick="testAudio()">🔊 试听音高</button>
       <button class="action-btn btn-secondary" onclick="resetTask()">↺ 重置</button>
     </div>
 
@@ -448,8 +447,8 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.9</span>
-  <span id="audioStatus">🔊 请先点「试听音高」</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.10</span>
+  <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
 <!-- ===== 任务完成提示弹窗 ===== -->
@@ -860,16 +859,16 @@ function getRandomPath() {
 }
 
 // ============================================================
-//  发声：每次只播一个纯音，先停掉上一个
+//  Web Audio（音高与桌面原稿 Research prototype 一致）
 // ============================================================
-const liveAudio = [];
 const liveOsc = [];
 
+function setAudioStatus(text) {
+  const el = document.getElementById('audioStatus');
+  if (el) el.textContent = text;
+}
+
 function stopAllSounds() {
-  while (liveAudio.length) {
-    const a = liveAudio.pop();
-    try { a.pause(); a.src = ''; } catch (err) {}
-  }
   const c = audioCtx;
   const t = c ? c.currentTime : 0;
   liveOsc.forEach(function (o) {
@@ -877,70 +876,12 @@ function stopAllSounds() {
       if (o._gain) {
         o._gain.gain.cancelScheduledValues(t);
         o._gain.gain.setValueAtTime(Math.max(o._gain.gain.value, 0.0001), t);
-        o._gain.gain.linearRampToValueAtTime(0.0001, t + 0.03);
+        o._gain.gain.linearRampToValueAtTime(0.0001, t + 0.02);
       }
-      o.stop(t + 0.04);
+      o.stop(t + 0.03);
     } catch (err) {}
   });
   liveOsc.length = 0;
-}
-
-function setAudioStatus(text) {
-  const el = document.getElementById('audioStatus');
-  if (el) el.textContent = text;
-}
-
-function makeWavBlob(freq, durSec, peak) {
-  const sr = 44100;
-  const n = Math.max(2205, Math.floor(sr * durSec));
-  const dataSize = n * 2;
-  const buf = new ArrayBuffer(44 + dataSize);
-  const v = new DataView(buf);
-  function wstr(off, s) {
-    for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
-  }
-  wstr(0, 'RIFF');
-  v.setUint32(4, 36 + dataSize, true);
-  wstr(8, 'WAVE');
-  wstr(12, 'fmt ');
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true);
-  v.setUint16(22, 1, true);
-  v.setUint32(24, sr, true);
-  v.setUint32(28, sr * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  wstr(36, 'data');
-  v.setUint32(40, dataSize, true);
-  const fadeIn = Math.min(882, Math.floor(n / 8));
-  const fadeOut = Math.min(1764, Math.floor(n / 4));
-  for (let i = 0; i < n; i++) {
-    let env = 1;
-    if (i < fadeIn) env = i / fadeIn;
-    else if (i > n - fadeOut) env = Math.max(0, (n - i) / fadeOut);
-    const t = i / sr;
-    const s = env * peak * Math.sin(2 * Math.PI * freq * t);
-    v.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, s)) * 32767), true);
-  }
-  return new Blob([buf], { type: 'audio/wav' });
-}
-
-function playWavTone(freq, dur, peak) {
-  try {
-    const blob = makeWavBlob(freq, dur, peak);
-    const url = URL.createObjectURL(blob);
-    const a = new Audio(url);
-    a.preload = 'auto';
-    a.volume = 1;
-    liveAudio.push(a);
-    const p = a.play();
-    if (p && p.catch) {
-      p.catch(function () { setAudioStatus('⚠ 浏览器拦截了声音'); });
-    }
-    a.onended = function () { URL.revokeObjectURL(url); };
-  } catch (err) {
-    setAudioStatus('⚠ 备用发声失败');
-  }
 }
 
 function unlockAudioSync() {
@@ -956,7 +897,6 @@ function unlockAudioSync() {
   if (audioCtx.state === 'suspended') {
     try { audioCtx.resume(); } catch (err) {}
   }
-  setAudioStatus(audioCtx.state === 'running' ? '🔊 声音已打开' : '🔊 正在打开声音…');
 }
 
 function ensureAudio() {
@@ -964,68 +904,72 @@ function ensureAudio() {
 }
 
 function playTone(freq, dur, type, vol) {
-  freq = Number(freq);
-  dur = Math.max(0.08, Number(dur) || 0.28);
-  vol = Number(vol);
-  if (!isFinite(vol) || vol <= 0) vol = 0.5;
-  if (!isFinite(freq) || freq < 20) freq = BASE_FREQ_C3;
+  if (dur == null) dur = 0.5;
+  if (type == null) type = 'sine';
+  if (vol == null) vol = 0.3;
+  if (!isFinite(freq) || freq <= 0) return;
   stopAllSounds();
-  unlockAudioSync();
-  playWavTone(freq, dur, Math.min(0.95, vol + 0.2));
+  ensureAudio();
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  o.connect(g);
+  g.connect(audioCtx.destination);
+  o._gain = g;
+  o.start();
+  o.stop(audioCtx.currentTime + dur);
+  liveOsc.push(o);
 }
 
 function playClick(dur) {
-  dur = Math.max(0.04, Number(dur) || 0.06);
-  playTone(880, dur, 'square', 0.28);
+  if (dur == null) dur = 0.08;
+  ensureAudio();
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'square';
+  o.frequency.value = 800;
+  g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  o.connect(g);
+  g.connect(audioCtx.destination);
+  o.start();
+  o.stop(audioCtx.currentTime + dur);
 }
 
 function playNoise(dur) {
-  dur = Number(dur) || 0.35;
+  if (dur == null) dur = 0.35;
   stopAllSounds();
-  unlockAudioSync();
-  const c = audioCtx;
-  if (!c) return;
-  try {
-    const sz = Math.max(1, Math.floor(c.sampleRate * dur));
-    const buf = c.createBuffer(1, sz, c.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < sz; i++) d[i] = (Math.random() * 2 - 1) * 0.95;
-    const s = c.createBufferSource();
-    const g = c.createGain();
-    s.buffer = buf;
-    g.gain.value = 0.85;
-    s.connect(g);
-    g.connect(c.destination);
-    s._gain = g;
-    s.start();
-    s.stop(c.currentTime + dur);
-    liveOsc.push(s);
-  } catch (err) {}
+  ensureAudio();
+  const sz = audioCtx.sampleRate * dur;
+  const buf = audioCtx.createBuffer(1, sz, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < sz; i++) d[i] = (Math.random() * 2 - 1) * 0.95;
+  const s = audioCtx.createBufferSource(), g = audioCtx.createGain();
+  s.buffer = buf;
+  g.gain.setValueAtTime(0.85, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  s.connect(g);
+  g.connect(audioCtx.destination);
+  s.start();
+  s.stop(audioCtx.currentTime + dur);
 }
 
 function playTransitionCue(nr, nc) {
-  playClick(0.05);
-  setTimeout(function () { playNodeSound(nr, nc); }, 220);
+  playClick(0.06);
+  setTimeout(function () { playNodeSound(nr, nc); }, 100);
 }
 
 function playNodeSound(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq, 0.28, 'sine', 0.55);
+  playTone(freq, 0.5, 'sine', 0.38);
   updateSoundInfo(r, c, freq);
 }
 
 function playCorrectionConfirm(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq * 0.75, 0.12, 'sine', 0.28);
-  setTimeout(function () { playTone(freq, 0.28, 'sine', 0.5); }, 260);
-}
-
-function testAudio() {
-  unlockAudioSync();
-  playTone(getNodeFreq(0, 0), 0.28, 'sine', 0.55);
-  setTimeout(function () { playTone(getNodeFreq(0, 1), 0.28, 'sine', 0.55); }, 450);
-  setAudioStatus('🔊 已触发试音');
-  addLog('system', '试音：C3 → F3，两个音分开播放。');
+  playTone(freq * 0.75, 0.15, 'sine', 0.22);
+  setTimeout(function () { playTone(freq, 0.35, 'sine', 0.38); }, 160);
 }
 
 function updateSoundInfo(r, c, freq) {
@@ -1046,8 +990,8 @@ async function playPathPreview(path) {
 
   document.getElementById('statusDot').className = 'status-dot dot-preview';
 
-  const NOTE_DUR = 260;
-  const NOTE_GAP = 280;
+  const NOTE_DUR = 480;
+  const NOTE_GAP = 160;
   const STEP_TIME = NOTE_DUR + NOTE_GAP;
   const ROUND_GAP = 800; // 每轮之间间隔
 
@@ -1071,7 +1015,7 @@ async function playPathPreview(path) {
       const cell = document.getElementById(`cell-${node.r}-${node.c}`);
       if (cell) cell.classList.add('preview-highlight');
 
-      playTone(freq, NOTE_DUR / 1000, 'sine', 0.4);
+      playTone(freq, NOTE_DUR / 1000, 'sine', 0.42);
       updateSoundInfo(node.r, node.c, freq);
 
       addLog('preview', `  ♪ R${round}·节点(${node.r},${node.c}) → ${name} [${Math.round(freq)}Hz] (${i+1}/${path.length})`);
@@ -1474,7 +1418,7 @@ function handleMove(dr, dc) {
     state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:true});
 
     if (state.condition === 3) playTransitionCue(nr, nc);
-    else playNodeSound(nr, nc);
+    else { playClick(0.06); setTimeout(()=>playNodeSound(nr,nc),80); }
 
     flashCell(nr,nc,'correct-flash');
     addLog('move',`[${ts}s] 前进 → (${nr},${nc}) ✓ [步${state.pathIdx}/${state.path.length-1}]`);
@@ -1487,7 +1431,7 @@ function handleMove(dr, dc) {
     state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:false,backtrack:true});
 
     if (state.condition === 3) playTransitionCue(nr, nc);
-    else playNodeSound(nr, nc);
+    else { playClick(0.06); setTimeout(()=>playNodeSound(nr,nc),80); }
 
     addLog('info',`[${ts}s] 回退 → (${nr},${nc}) 路径节点 — 无误差`);
 
@@ -1504,7 +1448,8 @@ function handleMove(dr, dc) {
       setTimeout(()=>playNodeSound(nr,nc),400);
       addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc}) — 强噪声信号`);
     } else {
-      playNodeSound(nr,nc);
+      playClick(0.06);
+      setTimeout(()=>playNodeSound(nr,nc),80);
       addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc})（无误差信号）`);
     }
     flashCell(nr,nc,'error-flash');
@@ -1692,7 +1637,7 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.9');
+addLog('system','系统初始化完成 v1.10');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
