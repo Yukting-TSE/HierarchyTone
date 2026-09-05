@@ -452,7 +452,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.20</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.21</span>
   <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
@@ -940,26 +940,28 @@ function playTone(freq, dur, type, vol) {
 }
 
 function playNoise(dur) {
-  dur = Number(dur) || 0.1;
+  // 条件三误差：振荡器刺音（非白噪声缓冲），更响、更易辨
+  dur = Number(dur) || 0.28;
   ensureAudio();
   if (!audioCtx) return;
   stopVoices(0.02);
   try {
-    const sz = Math.max(1, Math.floor(audioCtx.sampleRate * dur));
-    const buf = audioCtx.createBuffer(1, sz, audioCtx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < sz; i++) d[i] = (Math.random() * 2 - 1) * 0.35;
-    const s = audioCtx.createBufferSource();
-    const g = audioCtx.createGain();
     const t0 = audioCtx.currentTime;
-    s.buffer = buf;
-    g.gain.setValueAtTime(0.14, t0);
-    g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
-    s.connect(g);
-    g.connect(audioCtx.destination);
-    s.start(t0);
-    s.stop(t0 + dur + 0.01);
-    activeVoices.push({ source: s, gain: g });
+    const freqs = [95, 140, 210];
+    const vol = 0.28;
+    for (let i = 0; i < freqs.length; i++) {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(freqs[i], t0);
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g);
+      g.connect(audioCtx.destination);
+      o.start(t0);
+      o.stop(t0 + dur + 0.02);
+      activeVoices.push({ source: o, gain: g });
+    }
   } catch (err) {}
 }
 
@@ -1410,8 +1412,8 @@ function handleMove(dr, dc) {
       state.eventLog.push({type:'error',time:ts,from:{...state.currentPos},attempted:{r:nr,c:nc},reason:'boundary'});
       if (state.condition === 3) {
         const rr = state.currentPos.r, cc = state.currentPos.c;
-        soundFn = function () { playNoise(0.1); };
-        addLog('error',`[${ts}s] 边界错误 → 噪声提示`);
+        soundFn = function () { playNoise(0.28); };
+        addLog('error',`[${ts}s] 边界错误 → 振荡器误差音`);
       } else {
         const rr = state.currentPos.r, cc = state.currentPos.c;
         soundFn = function () { playNodeSound(rr, cc); };
@@ -1476,8 +1478,8 @@ function handleMove(dr, dc) {
       state.eventLog.push({type:'error',time:ts,from:prevPos,to:{r:nr,c:nc},reason:'off-path'});
 
       if (state.condition === 3) {
-        soundFn = function () { playNoise(0.1); };
-        addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc}) — 噪声提示`);
+        soundFn = function () { playNoise(0.28); };
+        addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc}) — 振荡器误差音`);
       } else {
         soundFn = function () { playNodeSound(nr,nc); };
         addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc})（无误差信号）`);
@@ -1731,8 +1733,9 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.20');
+addLog('system','系统初始化完成 v1.21');
 addLog('info','• 音高间距已加大：列约大六度、行整八度');
+addLog('info','• 条件三误差改为振荡器刺音（更明显）');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
