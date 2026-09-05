@@ -345,7 +345,7 @@
       <button class="condition-btn" data-cond="3" onclick="selectCondition(3)">
         条件三：完全结构化 <span class="tag t3">C3</span>
       </button>
-      <div class="hint-text" id="condDesc">所有节点播放相同纯音，无差异化反馈。</div>
+      <div class="hint-text" id="condDesc">每个格子都是同一个音（C4），走哪都不变。没有预听，走错了也没有噪声。</div>
     </div>
 
     <div class="panel-section">
@@ -1053,9 +1053,9 @@ function drawPathArrows() {
 //  条件 & 难度
 // ============================================================
 const COND_DESC = {
-  1: '所有节点播放相同纯音（C4），无差异化反馈。无旋律预听。',
-  2: '节点对应旋律L3唯一音符。任务前播放3遍路径旋律。无方向提示和误差信号。',
-  3: '旋律绝对编码 + 3遍预听 + 方向过渡提示 + 强误差噪声 + 纠正确认。完整结构闭环。'
+  1: '每个格子都是同一个音（C4），走哪都不变。没有预听，走错了也没有噪声。',
+  2: '每个格子音高不同，能靠音高分辨位置。开始前先听三遍路径。走错了没有噪声。',
+  3: '每个格子音高不同，开始前听三遍路径。走对了有过渡提示，走错了有噪声，走回路径有确认音。'
 };
 
 function selectCondition(c) {
@@ -1208,7 +1208,19 @@ function proceedToTLX() {
   });
   document.getElementById('tlxBadge').textContent =
     `条件 C${t.condition} · ${t.difficulty==='simple'?'简单路径':'复杂路径'} · 第 ${t.trialNumber} 次`;
-  document.getElementById('tlxModal').classList.add('show');
+  const modal = document.getElementById('tlxModal');
+  const body = modal.querySelector('.tlx-body');
+  modal.classList.add('show');
+  function toTop() {
+    if (body) body.scrollTop = 0;
+    if (modal) modal.scrollTop = 0;
+  }
+  toTop();
+  requestAnimationFrame(function () {
+    toTop();
+    requestAnimationFrame(toTop);
+  });
+  setTimeout(toTop, 0);
 }
 
 function resetTask() {
