@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>非视觉条件下听觉表征界面控制系统</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -116,6 +117,9 @@
     gap: 6px; background: #FFFFFF; border: 1px solid #E2E8F0;
     border-radius: 12px; padding: 20px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   .grid-cell {
     width: 88px; height: 88px; border: 2px solid #E2E8F0; border-radius: 8px;
@@ -155,9 +159,10 @@
   .arrow-hint { display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .arrow-row { display: flex; gap: 4px; }
   .arrow-key {
-    width: 38px; height: 34px; border: 1.5px solid #E2E8F0; border-radius: 6px;
+    width: 52px; height: 44px; border: 1.5px solid #E2E8F0; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 16px; color: #A0AEC0; background: #fff; transition: all 0.1s;
+    font-size: 20px; color: #4A5568; background: #fff; transition: all 0.1s;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
   .arrow-key.pressed { background: #667EEA; color: #fff; border-color: #667EEA; }
 
@@ -367,14 +372,14 @@
     <div class="panel-section">
       <h3>操作方式</h3>
       <div class="arrow-hint">
-        <div class="arrow-row"><div class="arrow-key" id="keyUp">↑</div></div>
+        <div class="arrow-row"><button type="button" class="arrow-key" id="keyUp">↑</button></div>
         <div class="arrow-row">
-          <div class="arrow-key" id="keyLeft">←</div>
-          <div class="arrow-key" id="keyDown">↓</div>
-          <div class="arrow-key" id="keyRight">→</div>
+          <button type="button" class="arrow-key" id="keyLeft">←</button>
+          <button type="button" class="arrow-key" id="keyDown">↓</button>
+          <button type="button" class="arrow-key" id="keyRight">→</button>
         </div>
       </div>
-      <div class="hint-text" style="margin-top:8px; text-align:center;">方向键移动 · 空格重播 · ESC中断</div>
+      <div class="hint-text" style="margin-top:8px; text-align:center;">点方向键、滑动格子，或用键盘方向键</div>
     </div>
   </div>
 
@@ -417,7 +422,7 @@
     </div>
 
     <div style="opacity:0.5">
-      <div style="font-size:11px; color:#A0AEC0;">键盘方向键控制移动 · 空格键播放当前节点音</div>
+      <div style="font-size:11px; color:#A0AEC0;">滑动格子或点左侧方向键移动 · 空格重播当前音</div>
     </div>
   </div>
 
@@ -447,7 +452,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.11</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.12</span>
   <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
@@ -593,6 +598,7 @@
   </div>
 </div>
 
+<audio id="tonePlayer" playsinline webkit-playsinline></audio>
 <script>
 // ============================================================
 //  全局
@@ -811,18 +817,20 @@ function trialsToCsv(trials) {
 }
 
 // ============================================================
-//  宽间距旋律编码
+//  宽间距旋律：相对音程与原稿相同，整体从 C3 上移纯四度到 F3
+//  C3 在 iPad 喇叭上出不来；C4 又偏尖。F3≈175Hz 是中间档。
 // ============================================================
-const BASE_FREQ_C3 = 130.81;
+const BASE_FREQ = 174.61;
 const MELODY_COL = ['C', 'F', 'A#', 'D#'];
 const ROW_TRANSPOSE = [0, 7, 14, 21];
 const NOTE_SEMITONES = {
   'C':0,'C#':1,'D':2,'D#':3,'E':4,'F':5,
   'F#':6,'G':7,'G#':8,'A':9,'A#':10,'B':11
 };
+const PITCH_SHIFT = 5;
 
 function calcFreq(semitonesFromC3) {
-  return BASE_FREQ_C3 * Math.pow(2, semitonesFromC3 / 12);
+  return BASE_FREQ * Math.pow(2, semitonesFromC3 / 12);
 }
 function getNodeSemitones(r, c) {
   return NOTE_SEMITONES[MELODY_COL[c]] + ROW_TRANSPOSE[r];
@@ -831,7 +839,7 @@ function getNodeFreq(r, c) {
   return calcFreq(getNodeSemitones(r, c));
 }
 function getNodeNoteName(r, c) {
-  const semi = getNodeSemitones(r, c);
+  const semi = getNodeSemitones(r, c) + PITCH_SHIFT;
   const oct = 3 + Math.floor(semi / 12);
   const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   return names[((semi % 12) + 12) % 12] + oct;
@@ -859,9 +867,10 @@ function getRandomPath() {
 }
 
 // ============================================================
-//  Web Audio（音高与桌面原稿 Research prototype 一致）
+//  发声：WAV（iPad 能出声）+ 振荡器；每次只保留一个音
 // ============================================================
 const liveOsc = [];
+let toneUrl = '';
 
 function setAudioStatus(text) {
   const el = document.getElementById('audioStatus');
@@ -869,6 +878,10 @@ function setAudioStatus(text) {
 }
 
 function stopAllSounds() {
+  const player = document.getElementById('tonePlayer');
+  if (player) {
+    try { player.pause(); player.currentTime = 0; } catch (err) {}
+  }
   const c = audioCtx;
   const t = c ? c.currentTime : 0;
   liveOsc.forEach(function (o) {
@@ -884,18 +897,56 @@ function stopAllSounds() {
   liveOsc.length = 0;
 }
 
+function makeWavBlob(freq, durSec, peak) {
+  const sr = 44100;
+  const n = Math.max(1200, Math.floor(sr * durSec));
+  const dataSize = n * 2;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  function wstr(off, s) {
+    for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
+  }
+  wstr(0, 'RIFF');
+  v.setUint32(4, 36 + dataSize, true);
+  wstr(8, 'WAVE');
+  wstr(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true);
+  v.setUint32(28, sr * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  wstr(36, 'data');
+  v.setUint32(40, dataSize, true);
+  const fadeIn = Math.min(441, Math.floor(n / 10));
+  const fadeOut = Math.min(882, Math.floor(n / 5));
+  for (let i = 0; i < n; i++) {
+    let env = 1;
+    if (i < fadeIn) env = i / fadeIn;
+    else if (i > n - fadeOut) env = Math.max(0, (n - i) / fadeOut);
+    const s = env * peak * Math.sin(2 * Math.PI * freq * i / sr);
+    v.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, s)) * 32767), true);
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
 function unlockAudioSync() {
   try {
     if (navigator.audioSession) navigator.audioSession.type = 'playback';
   } catch (err) {}
   const AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC) {
-    setAudioStatus('⚠ 浏览器不支持 Web Audio');
-    return;
+  if (AC) {
+    if (!audioCtx) audioCtx = new AC();
+    if (audioCtx.state === 'suspended') {
+      try { audioCtx.resume(); } catch (err) {}
+    }
   }
-  if (!audioCtx) audioCtx = new AC();
-  if (audioCtx.state === 'suspended') {
-    try { audioCtx.resume(); } catch (err) {}
+  const player = document.getElementById('tonePlayer');
+  if (player && player.paused) {
+    const p = player.play();
+    if (p && p.catch) p.catch(function () {});
+    try { player.pause(); } catch (err) {}
   }
 }
 
@@ -904,29 +955,29 @@ function ensureAudio() {
 }
 
 function playTone(freq, dur, type, vol) {
-  if (dur == null) dur = 0.5;
-  if (type == null) type = 'sine';
-  if (vol == null) vol = 0.3;
+  if (dur == null) dur = 0.4;
+  if (vol == null) vol = 0.5;
   if (!isFinite(freq) || freq <= 0) return;
   stopAllSounds();
-  ensureAudio();
-  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.type = type;
-  o.frequency.value = freq;
-  g.gain.setValueAtTime(vol, audioCtx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-  o.connect(g);
-  g.connect(audioCtx.destination);
-  o._gain = g;
-  o.start();
-  o.stop(audioCtx.currentTime + dur);
-  liveOsc.push(o);
+  unlockAudioSync();
+  try {
+    const blob = makeWavBlob(freq, dur, Math.min(0.92, vol + 0.25));
+    if (toneUrl) URL.revokeObjectURL(toneUrl);
+    toneUrl = URL.createObjectURL(blob);
+    const player = document.getElementById('tonePlayer');
+    if (player) {
+      player.src = toneUrl;
+      const p = player.play();
+      if (p && p.catch) p.catch(function () { setAudioStatus('⚠ 播放被拦截，请再点开始'); });
+    }
+  } catch (err) {}
 }
 
 function playNoise(dur) {
   if (dur == null) dur = 0.35;
   stopAllSounds();
   ensureAudio();
+  if (!audioCtx) return;
   const sz = audioCtx.sampleRate * dur;
   const buf = audioCtx.createBuffer(1, sz, audioCtx.sampleRate);
   const d = buf.getChannelData(0);
@@ -947,14 +998,14 @@ function playTransitionCue(nr, nc) {
 
 function playNodeSound(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq, 0.5, 'sine', 0.38);
+  playTone(freq, 0.4, 'sine', 0.5);
   updateSoundInfo(r, c, freq);
 }
 
 function playCorrectionConfirm(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq * 0.75, 0.15, 'sine', 0.22);
-  setTimeout(function () { playTone(freq, 0.35, 'sine', 0.38); }, 160);
+  playTone(freq * 0.75, 0.15, 'sine', 0.28);
+  setTimeout(function () { playTone(freq, 0.32, 'sine', 0.45); }, 220);
 }
 
 function updateSoundInfo(r, c, freq) {
@@ -1164,6 +1215,8 @@ async function startTask() {
     return;
   }
   if (!ensureSession()) return;
+  document.getElementById('subjectId').blur();
+  document.getElementById('btnStart').blur();
   unlockAudioSync();
   if (audioCtx && audioCtx.state === 'suspended') {
     try { await audioCtx.resume(); } catch (err) {}
@@ -1478,19 +1531,23 @@ document.addEventListener('keydown', (e) => {
     if (e.key === ' ' || e.key === 'Enter') e.preventDefault();
     return;
   }
-  if (e.target.tagName === 'INPUT') return;
 
   const km = {
     'ArrowUp':{dr:-1,dc:0,id:'keyUp'},'ArrowDown':{dr:1,dc:0,id:'keyDown'},
-    'ArrowLeft':{dr:0,dc:-1,id:'keyLeft'},'ArrowRight':{dr:0,dc:1,id:'keyRight'}
+    'ArrowLeft':{dr:0,dc:-1,id:'keyLeft'},'ArrowRight':{dr:0,dc:1,id:'keyRight'},
+    'w':{dr:-1,dc:0,id:'keyUp'},'s':{dr:1,dc:0,id:'keyDown'},
+    'a':{dr:0,dc:-1,id:'keyLeft'},'d':{dr:0,dc:1,id:'keyRight'}
   };
-  if (km[e.key]) {
+  const map = km[e.key] || km[e.key.toLowerCase()];
+  if (map) {
+    if (e.target.tagName === 'INPUT' && state.phase !== 'running') return;
     e.preventDefault();
-    const {dr,dc,id}=km[e.key];
-    const el=document.getElementById(id);
-    el.classList.add('pressed'); setTimeout(()=>el.classList.remove('pressed'),150);
-    handleMove(dr,dc);
+    const el = document.getElementById(map.id);
+    if (el) { el.classList.add('pressed'); setTimeout(function () { el.classList.remove('pressed'); }, 150); }
+    handleMove(map.dr, map.dc);
+    return;
   }
+  if (e.target.tagName === 'INPUT') return;
   if (e.key===' ' && state.phase==='running' && state.currentPos) {
     e.preventDefault();
     playNodeSound(state.currentPos.r,state.currentPos.c);
@@ -1501,6 +1558,57 @@ document.addEventListener('keydown', (e) => {
     addLog('system','ESC — 中断旋律预听');
   }
 });
+
+function nudge(dr, dc, el) {
+  unlockAudioSync();
+  if (el) {
+    el.classList.add('pressed');
+    setTimeout(function () { el.classList.remove('pressed'); }, 150);
+  }
+  handleMove(dr, dc);
+}
+
+[['keyUp',-1,0],['keyDown',1,0],['keyLeft',0,-1],['keyRight',0,1]].forEach(function (item) {
+  const el = document.getElementById(item[0]);
+  if (!el) return;
+  el.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    nudge(item[1], item[2], el);
+  });
+});
+
+(function bindGridSwipe() {
+  const grid = document.getElementById('gridContainer');
+  if (!grid) return;
+  let sx = 0, sy = 0, tracking = false;
+  grid.addEventListener('pointerdown', function (e) {
+    tracking = true;
+    sx = e.clientX;
+    sy = e.clientY;
+  });
+  grid.addEventListener('pointerup', function (e) {
+    if (!tracking) return;
+    tracking = false;
+    const dx = e.clientX - sx;
+    const dy = e.clientY - sy;
+    const dist = Math.hypot(dx, dy);
+    if (dist >= 28) {
+      if (Math.abs(dx) > Math.abs(dy)) nudge(0, dx > 0 ? 1 : -1);
+      else nudge(dy > 0 ? 1 : -1, 0);
+      return;
+    }
+    const cell = e.target.closest ? e.target.closest('.grid-cell') : null;
+    if (!cell || !state.currentPos || state.phase !== 'running') return;
+    const parts = (cell.id || '').split('-');
+    if (parts.length < 3) return;
+    const r = parseInt(parts[1], 10);
+    const c = parseInt(parts[2], 10);
+    const dr = r - state.currentPos.r;
+    const dc = c - state.currentPos.c;
+    if (Math.abs(dr) + Math.abs(dc) === 1) nudge(dr, dc);
+  });
+  grid.addEventListener('pointercancel', function () { tracking = false; });
+})();
 
 // ============================================================
 //  NASA-TLX
@@ -1621,7 +1729,7 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.11');
+addLog('system','系统初始化完成 v1.12');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
