@@ -452,7 +452,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.22</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.23</span>
   <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
@@ -845,17 +845,17 @@ function getNodeNoteName(r, c) {
 }
 
 // ============================================================
-//  路径
+//  路径（均从低音格起步，避免预听一开场就是高音）
 // ============================================================
 const PATHS = {
   simple: [
     [{r:0,c:0},{r:0,c:1},{r:0,c:2},{r:1,c:2},{r:2,c:2},{r:2,c:3},{r:3,c:3}],
-    [{r:3,c:0},{r:2,c:0},{r:1,c:0},{r:1,c:1},{r:1,c:2},{r:0,c:2},{r:0,c:3}],
-    [{r:0,c:3},{r:1,c:3},{r:1,c:2},{r:2,c:2},{r:2,c:1},{r:3,c:1},{r:3,c:0}],
+    [{r:0,c:0},{r:1,c:0},{r:2,c:0},{r:2,c:1},{r:3,c:1},{r:3,c:2},{r:3,c:3}],
+    [{r:0,c:0},{r:0,c:1},{r:1,c:1},{r:1,c:2},{r:2,c:2},{r:3,c:2},{r:3,c:3}],
   ],
   complex: [
     [{r:0,c:0},{r:0,c:1},{r:1,c:1},{r:1,c:2},{r:1,c:3},{r:2,c:3},{r:2,c:2},{r:3,c:2},{r:3,c:1},{r:3,c:0},{r:2,c:0}],
-    [{r:3,c:3},{r:3,c:2},{r:3,c:1},{r:2,c:1},{r:1,c:1},{r:0,c:1},{r:0,c:2},{r:0,c:3},{r:1,c:3},{r:2,c:3},{r:2,c:2}],
+    [{r:0,c:0},{r:0,c:1},{r:0,c:2},{r:1,c:2},{r:2,c:2},{r:2,c:1},{r:3,c:1},{r:3,c:2},{r:3,c:3},{r:2,c:3},{r:1,c:3}],
     [{r:0,c:0},{r:1,c:0},{r:2,c:0},{r:3,c:0},{r:3,c:1},{r:2,c:1},{r:2,c:2},{r:2,c:3},{r:1,c:3},{r:0,c:3},{r:0,c:2}],
   ]
 };
@@ -1427,15 +1427,18 @@ function handleMove(dr, dc) {
 
     const prevPos = {...state.currentPos};
     const lastIdx = state.path.length - 1;
+    const penult = lastIdx >= 1 ? state.path[lastIdx - 1] : null;
     const nextTarget = state.path[state.pathIdx + 1];
     const isNextOnPath = nextTarget && nextTarget.r===nr && nextTarget.c===nc;
+    const atPenult = !!(penult && penult.r === nr && penult.c === nc);
+    const fromPenult = !!(penult && prevPos.r === penult.r && prevPos.c === penult.c);
     const atGoal = isGoalCell(nr, nc);
-    const firstGoalIdx = atGoal ? findNodeInPath(nr, nc) : -1;
-    const reachGoalNow = atGoal && (isNextOnPath || state.pathIdx >= lastIdx - 1 || (firstGoalIdx >= 0 && state.pathIdx > firstGoalIdx));
+    // 放松：走错过也行——站上倒数第二格，或从倒数第二格走到终点，即算通关进度
+    const reachGoalNow = atGoal && (isNextOnPath || state.pathIdx >= lastIdx - 1 || fromPenult);
     const backIdx = findBacktrackIndex(nr, nc);
-    const isBackOnPath = !isNextOnPath && !reachGoalNow && backIdx >= 0;
+    const isBackOnPath = !isNextOnPath && !reachGoalNow && !atPenult && backIdx >= 0;
 
-    if (isNextOnPath || reachGoalNow) {
+    if (isNextOnPath || reachGoalNow || atPenult) {
       const correcting = state.lastWasError || !state.onPath;
       if (correcting) {
         state.corrections++;
@@ -1445,8 +1448,9 @@ function handleMove(dr, dc) {
       state.lastWasError = false;
       state.onPath = true;
       state.currentPos = {r:nr,c:nc};
-      if (isNextOnPath) state.pathIdx++;
-      else state.pathIdx = lastIdx;
+      if (reachGoalNow) state.pathIdx = lastIdx;
+      else if (atPenult) state.pathIdx = Math.max(state.pathIdx, lastIdx - 1);
+      else if (isNextOnPath) state.pathIdx++;
       if (state.pathIdx > lastIdx) state.pathIdx = lastIdx;
       state.visitedCells.add(`${nr},${nc}`);
       state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:true});
@@ -1735,9 +1739,10 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.22');
+addLog('system','系统初始化完成 v1.23');
 addLog('info','• 格子音高：振荡器（triangle），自 C3 起算');
 addLog('info','• 音程拉大：列纯五度、行大六度（非整八度抬高）');
+addLog('info','• 路径均从低音格起步；走错过可从倒数第二格接上通关');
 addLog('info','• 条件三误差：振荡器刺音');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
