@@ -452,7 +452,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.17</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.18</span>
   <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
@@ -854,7 +854,7 @@ const PATHS = {
   ],
   complex: [
     [{r:0,c:0},{r:0,c:1},{r:1,c:1},{r:1,c:2},{r:1,c:3},{r:2,c:3},{r:2,c:2},{r:3,c:2},{r:3,c:1},{r:3,c:0},{r:2,c:0}],
-    [{r:3,c:3},{r:3,c:2},{r:2,c:2},{r:2,c:1},{r:1,c:1},{r:0,c:1},{r:0,c:2},{r:0,c:3},{r:1,c:3},{r:2,c:3},{r:2,c:2}],
+    [{r:3,c:3},{r:3,c:2},{r:3,c:1},{r:2,c:1},{r:1,c:1},{r:0,c:1},{r:0,c:2},{r:0,c:3},{r:1,c:3},{r:2,c:3},{r:2,c:2}],
     [{r:0,c:0},{r:1,c:0},{r:2,c:0},{r:3,c:0},{r:3,c:1},{r:2,c:1},{r:2,c:2},{r:2,c:3},{r:1,c:3},{r:0,c:3},{r:0,c:2}],
   ]
 };
@@ -1185,6 +1185,22 @@ function findNodeInPath(r, c) {
     if (state.path[i].r === r && state.path[i].c === c) return i;
   return -1;
 }
+function findBacktrackIndex(r, c) {
+  for (let i = Math.min(state.pathIdx, state.path.length - 1); i >= 0; i--)
+    if (state.path[i].r === r && state.path[i].c === c) return i;
+  return -1;
+}
+function isGoalCell(r, c) {
+  if (!state.path.length) return false;
+  const g = state.path[state.path.length - 1];
+  return g.r === r && g.c === c;
+}
+function scheduleEndTask() {
+  if (state.phase !== 'running') return;
+  setTimeout(function () {
+    if (state.phase === 'running') endTask();
+  }, 500);
+}
 
 // ============================================================
 //  任务流程
@@ -1276,8 +1292,10 @@ async function startTask() {
 }
 
 function endTask() {
+  if (state.phase !== 'running') return;
   state.phase = 'done';
   clearInterval(state.timerInterval);
+  clearPendingTones();
   const endedAt = Date.now();
   const perfEnd = performance.now();
   state.elapsed = (perfEnd - (state.trialStartedPerf || state.startTime)) / 1000;
@@ -1429,12 +1447,17 @@ function handleMove(dr, dc) {
     }
 
     const prevPos = {...state.currentPos};
+    const lastIdx = state.path.length - 1;
     const nextTarget = state.path[state.pathIdx + 1];
     const isNextOnPath = nextTarget && nextTarget.r===nr && nextTarget.c===nc;
-    const targetPathIndex = findNodeInPath(nr, nc);
-    const isBackOnPath = targetPathIndex >= 0 && targetPathIndex <= state.pathIdx;
+    const atGoal = isGoalCell(nr, nc);
+    const firstGoalIdx = atGoal ? findNodeInPath(nr, nc) : -1;
+    // 终点格若在路径中重复出现：只有走过中间段后再踏上去，才算真正到达终点
+    const reachGoalNow = atGoal && (isNextOnPath || state.pathIdx >= lastIdx - 1 || (firstGoalIdx >= 0 && state.pathIdx > firstGoalIdx));
+    const backIdx = findBacktrackIndex(nr, nc);
+    const isBackOnPath = !isNextOnPath && !reachGoalNow && backIdx >= 0;
 
-    if (isNextOnPath) {
+    if (isNextOnPath || reachGoalNow) {
       const correcting = state.lastWasError || !state.onPath;
       if (correcting) {
         state.corrections++;
@@ -1444,7 +1467,9 @@ function handleMove(dr, dc) {
       state.lastWasError = false;
       state.onPath = true;
       state.currentPos = {r:nr,c:nc};
-      state.pathIdx++;
+      if (isNextOnPath) state.pathIdx++;
+      else state.pathIdx = lastIdx;
+      if (state.pathIdx > lastIdx) state.pathIdx = lastIdx;
       state.visitedCells.add(`${nr},${nc}`);
       state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:true});
 
@@ -1452,15 +1477,18 @@ function handleMove(dr, dc) {
       else playNodeSound(nr, nc);
 
       flashCell(nr,nc,'correct-flash');
-      addLog('move',`[${ts}s] 前进 → (${nr},${nc}) ✓ [步${state.pathIdx}/${state.path.length-1}]`);
+      addLog('move',`[${ts}s] 前进 → (${nr},${nc}) ✓ [步${state.pathIdx}/${lastIdx}]`);
 
-      if (state.pathIdx === state.path.length-1) setTimeout(function () { endTask(); },600);
+      if (state.pathIdx >= lastIdx) {
+        addLog('system', '已到达终点');
+        scheduleEndTask();
+      }
 
     } else if (isBackOnPath) {
       state.currentPos = {r:nr,c:nc};
       state.visitedCells.add(`${nr},${nc}`);
       state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:false,backtrack:true});
-      if (state.pathIdx > targetPathIndex) state.pathIdx = targetPathIndex;
+      state.pathIdx = backIdx;
 
       if (state.condition === 3) playTransitionCue(nr, nc);
       else playNodeSound(nr, nc);
@@ -1729,7 +1757,7 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.17');
+addLog('system','系统初始化完成 v1.18');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
