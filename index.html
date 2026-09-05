@@ -13,34 +13,38 @@
     margin: 0; height: 100%; width: 100%;
     overflow: hidden; position: fixed; inset: 0;
     font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    background: #f5f5f5; color: #111;
+    background: #f3f3f3; color: #111;
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
   }
   #page {
     position: absolute; left: 0; right: 0; top: 0;
     bottom: calc(52px + 44px + env(safe-area-inset-bottom));
     overflow-x: hidden; overflow-y: auto;
-    touch-action: none; background: #f5f5f5;
+    touch-action: none; background: #f3f3f3;
   }
   .sim-el { position: relative; outline: 3px solid transparent; outline-offset: -2px; }
   .sim-el.on { outline-color: #ff5000; z-index: 4; }
 
   .head {
     background: #fff;
-    padding: calc(6px + env(safe-area-inset-top)) 0 10px;
+    padding: calc(4px + env(safe-area-inset-top)) 0 8px;
     position: sticky; top: 0; z-index: 3;
   }
   .tabs {
-    display: flex; gap: 14px; padding: 6px 14px 10px;
+    display: flex; gap: 14px; padding: 4px 14px 8px;
     overflow-x: auto; overflow-y: hidden; white-space: nowrap;
     align-items: flex-end; touch-action: none;
-    -webkit-overflow-scrolling: auto;
   }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tab { font-size: 15px; color: #333; padding: 4px 0 6px; flex-shrink: 0; }
+  .tabs::-webkit-scrollbar, .icons-scroll::-webkit-scrollbar, .sk-row::-webkit-scrollbar { display: none; }
+  .tab { font-size: 15px; color: #333; padding: 4px 0 6px; flex-shrink: 0; position: relative; }
   .tab.on {
     color: #ff5000; font-size: 20px; font-weight: 800;
     border-bottom: 3px solid #ff5000; padding-bottom: 4px;
+  }
+  .tbadge {
+    position: absolute; top: -2px; right: -18px;
+    font-size: 9px; color: #fff; background: #ff5000;
+    border-radius: 6px 6px 6px 0; padding: 0 3px; font-weight: 700; line-height: 1.3;
   }
   .search-wrap { padding: 0 12px; }
   .search {
@@ -54,78 +58,136 @@
     color: #fff; font-size: 14px; font-weight: 700; display: flex; align-items: center;
   }
 
-  .icons {
-    display: flex; justify-content: space-between;
-    padding: 14px 10px 8px; background: #fff;
+  .icons-scroll {
+    display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+    background: #fff; touch-action: none;
   }
-  .icon { width: 16.6%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .icons-page {
+    min-width: 100%; scroll-snap-align: start;
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    padding: 10px 4px 2px; row-gap: 10px;
+  }
+  .icon { display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .bub {
-    width: 48px; height: 48px; border-radius: 50%;
+    width: 44px; height: 44px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 26px; position: relative; background: #fff7e6;
+    font-size: 24px; position: relative;
   }
   .mini {
-    position: absolute; top: -4px; right: -8px;
+    position: absolute; top: -5px; right: -10px;
     background: #ff3b30; color: #fff; font-size: 9px; font-weight: 700;
     padding: 1px 4px; border-radius: 6px 6px 6px 0; white-space: nowrap;
   }
-  .icon label { font-size: 11px; color: #333; text-align: center; line-height: 1.2; }
+  .icon label { font-size: 11px; color: #333; text-align: center; line-height: 1.15; }
+  .dots { display: flex; justify-content: center; gap: 4px; padding: 6px 0 8px; background: #fff; }
+  .doti { width: 10px; height: 3px; border-radius: 2px; background: #ddd; }
+  .doti.on { width: 14px; background: #ff5000; }
 
   .promo {
-    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
-    padding: 8px 10px; background: #fff;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px;
+    padding: 6px 8px; background: #fff;
   }
-  .pcol { background: #fafafa; border-radius: 10px; padding: 8px 6px 10px; }
-  .pt { font-size: 14px; font-weight: 800; display: flex; align-items: center; gap: 4px; }
+  .pcol { background: #f7f7f7; border-radius: 10px; padding: 7px 5px 8px; }
+  .pt { font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 3px; }
   .pt .sub {
-    font-size: 10px; font-weight: 700; color: #fff; background: #22c55e;
+    font-size: 9px; font-weight: 700; color: #fff; background: #22c55e;
     padding: 1px 4px; border-radius: 3px;
   }
   .pt .sub.o { background: #ff7a00; }
   .pimg {
-    margin-top: 6px; height: 72px; border-radius: 8px;
-    display: flex; align-items: center; justify-content: center; font-size: 40px;
+    margin-top: 5px; height: 86px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 48px;
   }
-  .prow { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; gap: 4px; }
+  .prow { display: flex; align-items: center; justify-content: space-between; margin-top: 5px; gap: 3px; }
   .pprice { color: #ff5000; font-weight: 800; font-size: 15px; }
   .ptag {
-    font-size: 11px; font-weight: 700; color: #fff;
+    font-size: 10px; font-weight: 700; color: #fff;
     background: #ff5000; padding: 3px 5px; border-radius: 3px; white-space: nowrap;
   }
 
-  .feed { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 8px 8px 12px; }
+  .seckill { background: #fff; margin-top: 6px; padding: 8px 0 10px; }
+  .sk-hd { display: flex; align-items: center; padding: 0 10px 8px; gap: 8px; }
+  .sk-title { font-size: 15px; font-weight: 800; }
+  .sk-time { display: flex; gap: 3px; align-items: center; font-size: 11px; color: #999; }
+  .sk-time b {
+    background: #111; color: #fff; border-radius: 3px; padding: 1px 4px; font-size: 11px;
+  }
+  .sk-more { margin-left: auto; font-size: 12px; color: #999; }
+  .sk-row { display: flex; overflow-x: auto; gap: 8px; padding: 0 10px; touch-action: none; }
+  .sk-item { width: 23%; min-width: 92px; flex-shrink: 0; }
+  .sk-img {
+    aspect-ratio: 1; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 40px;
+  }
+  .sk-pr { color: #ff5000; font-weight: 800; font-size: 14px; margin-top: 4px; }
+  .sk-was { font-size: 11px; color: #bbb; text-decoration: line-through; }
+
+  .guess {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 0 6px; font-size: 14px; font-weight: 800; color: #333;
+  }
+  .guess i { width: 36px; height: 1px; background: #ddd; display: block; }
+
+  .feed {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 6px 14px; align-items: start;
+  }
+  @media (min-width: 700px) { .feed { grid-template-columns: 1fr 1fr 1fr; } }
+  @media (min-width: 1024px) { .feed { grid-template-columns: 1fr 1fr 1fr 1fr; } }
+
   .card { background: #fff; border-radius: 10px; overflow: hidden; }
   .cover {
-    height: 170px; position: relative;
-    display: flex; align-items: center; justify-content: center; font-size: 64px;
+    aspect-ratio: 1; position: relative; overflow: hidden;
   }
+  .cover .obj {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(52px, 16vw, 120px); line-height: 1;
+    filter: drop-shadow(0 8px 14px rgba(0,0,0,.16));
+  }
+  @media (min-width: 700px) { .cover .obj { font-size: clamp(48px, 9vw, 96px); } }
+  @media (min-width: 1024px) { .cover .obj { font-size: clamp(44px, 7vw, 88px); } }
   .play {
-    position: absolute; left: 8px; top: 8px; width: 22px; height: 22px;
+    position: absolute; left: 7px; top: 7px; width: 22px; height: 22px;
     background: rgba(0,0,0,.45); color: #fff; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; font-size: 11px;
+    display: flex; align-items: center; justify-content: center; font-size: 11px; z-index: 1;
   }
-  .body { padding: 8px 8px 10px; }
-  .title { font-size: 13px; line-height: 1.4; color: #111; font-weight: 600; }
+  .live {
+    position: absolute; left: 7px; top: 7px; z-index: 1;
+    background: #ff2d54; color: #fff; font-size: 10px; font-weight: 800;
+    padding: 2px 5px; border-radius: 3px;
+  }
+  .ad {
+    position: absolute; left: 7px; bottom: 7px; z-index: 1;
+    background: rgba(0,0,0,.35); color: #fff; font-size: 10px;
+    padding: 1px 4px; border-radius: 2px;
+  }
+  .body { padding: 6px 8px 8px; }
+  .title {
+    font-size: 13px; line-height: 1.35; color: #111; font-weight: 600;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
   .tmall {
     display: inline-block; background: #ff0036; color: #fff;
     font-size: 10px; padding: 1px 3px; border-radius: 2px; margin-right: 3px; font-weight: 700;
+    vertical-align: 1px;
   }
-  .promo-line {
-    margin-top: 6px; font-size: 12px; color: #ff5000; font-weight: 600;
-    padding: 2px 0; min-height: 22px;
+  .tags { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; min-height: 0; }
+  .p-o { color: #ff5000; font-size: 12px; font-weight: 600; }
+  .p-g { color: #16a34a; font-size: 12px; font-weight: 600; }
+  .p-d { color: #666; font-size: 12px; }
+  .chip {
+    font-size: 10px; color: #ff5000; border: 1px solid #ffc4a8;
+    border-radius: 2px; padding: 0 4px; line-height: 1.45;
   }
-  .promo-line .ok { color: #16a34a; margin-left: 6px; }
+  .chip.g { color: #16a34a; border-color: #86efac; }
+  .chip.k { color: #666; border-color: #ddd; }
+  .shop { margin-top: 3px; font-size: 11px; color: #999; }
   .price-row { display: flex; align-items: baseline; gap: 4px; margin-top: 4px; }
-  .yen { color: #ff5000; font-size: 13px; font-weight: 800; }
-  .num { color: #ff5000; font-size: 20px; font-weight: 800; }
-  .after { font-size: 12px; color: #ff5000; padding: 2px 0; }
-  .foot {
-    display: flex; align-items: center; justify-content: flex-end; margin-top: 4px;
-  }
-  .fav {
-    font-size: 12px; color: #999; padding: 4px 0 0;
-    min-height: 24px; display: flex; align-items: center; gap: 2px;
-  }
+  .yen { color: #ff5000; font-size: 12px; font-weight: 800; }
+  .num { color: #ff5000; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+  .after { font-size: 11px; color: #ff5000; }
+  .fav { margin-left: auto; font-size: 12px; color: #999; white-space: nowrap; }
+  .more { font-size: 14px; color: #bbb; padding: 0 2px; }
 
   #coupon {
     position: absolute; left: 0; right: 0; z-index: 4;
@@ -139,7 +201,6 @@
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
   .c-txt { flex: 1; font-size: 13px; color: #fff; font-weight: 600; line-height: 1.2; }
-  .c-txt b { color: #fff; }
   .c-btn {
     background: #e11d48; color: #fff; border-radius: 12px;
     font-size: 12px; font-weight: 800; padding: 6px 10px; flex-shrink: 0;
@@ -180,7 +241,7 @@
     <div class="tabs" id="tabs">
       <div class="sim-el tab" data-lv="0" data-sp="关注，频道">关注</div>
       <div class="sim-el tab on" data-lv="0" data-sp="推荐，频道，已选中">推荐</div>
-      <div class="sim-el tab" data-lv="0" data-sp="闪购，频道">闪购</div>
+      <div class="sim-el tab" data-lv="0" data-sp="闪购，频道">闪购<span class="tbadge">外卖</span></div>
       <div class="sim-el tab" data-lv="0" data-sp="国补，频道">国补</div>
       <div class="sim-el tab" data-lv="0" data-sp="穿搭，频道">穿搭</div>
       <div class="sim-el tab" data-lv="0" data-sp="飞猪，频道">飞猪</div>
@@ -207,13 +268,35 @@
     </div>
   </div>
 
-  <div class="icons">
-    <div class="sim-el icon" data-lv="1" data-sp="天猫新品，按钮"><div class="bub">🐱</div><label>天猫新品</label></div>
-    <div class="sim-el icon" data-lv="1" data-sp="领淘金币，按钮"><div class="bub">🪙<span class="mini">省钱</span></div><label>领淘金币</label></div>
-    <div class="sim-el icon" data-lv="1" data-sp="试用领取，按钮"><div class="bub">🎁</div><label>试用领取</label></div>
-    <div class="sim-el icon" data-lv="1" data-sp="红包签到，按钮"><div class="bub">🧧<span class="mini">提现</span></div><label>红包签到</label></div>
-    <div class="sim-el icon" data-lv="1" data-sp="天猫超市，按钮"><div class="bub">🛒</div><label>天猫超市</label></div>
-    <div class="sim-el icon" data-lv="1" data-sp="芭芭农场，按钮"><div class="bub">🌳</div><label>芭芭农场</label></div>
+  <div class="icons-scroll" id="icons">
+    <div class="icons-page">
+      <div class="sim-el icon" data-lv="1" data-sp="天猫新品，按钮"><div class="bub" style="background:#fff3c4">🐱</div><label>天猫新品</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="领淘金币，按钮"><div class="bub" style="background:#ffe08a">🪙<span class="mini">省钱</span></div><label>领淘金币</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="试用领取，按钮"><div class="bub" style="background:#ffd0c4">🎁</div><label>试用领取</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="红包签到，按钮"><div class="bub" style="background:#ffc9c9">🧧<span class="mini">提现</span></div><label>红包签到</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="天猫超市，按钮"><div class="bub" style="background:#c8f0d4">🛒</div><label>天猫超市</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="芭芭农场，按钮"><div class="bub" style="background:#d4f0c8">🌳</div><label>芭芭农场</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="淘宝直播，按钮"><div class="bub" style="background:#ffd0e8">📺</div><label>淘宝直播</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="充值中心，按钮"><div class="bub" style="background:#d0e4ff">💳</div><label>充值中心</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="淘宝买菜，按钮"><div class="bub" style="background:#ffe4b8">🥬</div><label>淘宝买菜</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="飞猪旅行，按钮"><div class="bub" style="background:#cce8ff">✈️</div><label>飞猪旅行</label></div>
+    </div>
+    <div class="icons-page">
+      <div class="sim-el icon" data-lv="1" data-sp="阿里健康，按钮"><div class="bub" style="background:#c8f5e8">💊</div><label>阿里健康</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="淘宝拍卖，按钮"><div class="bub" style="background:#ffe0c2">🔨</div><label>淘宝拍卖</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="闲鱼，按钮"><div class="bub" style="background:#fff3a8">🐟</div><label>闲鱼</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="天猫国际，按钮"><div class="bub" style="background:#ffd4e5">🌍</div><label>天猫国际</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="淘宝特价版，按钮"><div class="bub" style="background:#ffd8b8">🏷️</div><label>特价版</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="淘宝租赁，按钮"><div class="bub" style="background:#dce4ff">📦</div><label>淘宝租赁</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="天天秒杀，按钮"><div class="bub" style="background:#ffd0d0">⚡</div><label>天天秒杀</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="淘宝教育，按钮"><div class="bub" style="background:#d8f0ff">📘</div><label>淘宝教育</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="口碑，按钮"><div class="bub" style="background:#ffe8c8">🍜</div><label>口碑</label></div>
+      <div class="sim-el icon" data-lv="1" data-sp="淘宝汽车，按钮"><div class="bub" style="background:#d4e8ff">🚗</div><label>淘宝汽车</label></div>
+    </div>
+  </div>
+  <div class="dots">
+    <div class="sim-el doti on" data-lv="5" data-sp="快捷入口，第一页"></div>
+    <div class="sim-el doti" data-lv="5" data-sp="快捷入口，第二页"></div>
   </div>
 
   <div class="promo">
@@ -243,81 +326,54 @@
     </div>
   </div>
 
-  <div class="feed">
-    <div class="sim-el card" data-lv="2" data-sp="香薰蜡烛，超级立减百分之十，券后价一百五十八元，三百一十六人收藏">
-      <div class="sim-el cover" data-lv="4" data-sp="图片，香薰蜡烛" style="background:linear-gradient(180deg,#faf7f2,#e8d5c4)">🕯️</div>
-      <div class="body">
-        <div class="sim-el title" data-lv="3" data-sp="天猫，香薰蜡烛"><span class="tmall">天猫</span>香薰蜡烛礼盒 卧室香氛</div>
-        <div class="sim-el promo-line" data-lv="5" data-sp="超级立减百分之十">超级立减 10%</div>
-        <div class="price-row">
-          <div class="sim-el" data-lv="4" data-sp="一百五十八元"><span class="yen">¥</span><span class="num">158</span></div>
-          <div class="sim-el after" data-lv="5" data-sp="券后价">券后价</div>
-        </div>
-        <div class="foot"><div class="sim-el fav" data-lv="5" data-sp="三百一十六人收藏">☆ 316</div></div>
+  <div class="seckill">
+    <div class="sk-hd">
+      <div class="sim-el sk-title" data-lv="1" data-sp="限时秒杀">限时秒杀</div>
+      <div class="sim-el sk-time" data-lv="5" data-sp="距结束二小时十五分三十三秒">
+        <b>02</b>:<b>15</b>:<b>33</b>
       </div>
+      <div class="sim-el sk-more" data-lv="1" data-sp="更多秒杀，按钮">更多 ›</div>
     </div>
-
-    <div class="sim-el card" data-lv="2" data-sp="皮衣外套，超级立减百分之十二，券后价七百零三元，一千八百四十九人收藏">
-      <div class="sim-el cover" data-lv="4" data-sp="图片，皮衣外套" style="background:linear-gradient(180deg,#2b2b2b,#111)">🧥</div>
-      <div class="body">
-        <div class="sim-el title" data-lv="3" data-sp="创世纪元皮衣外套">创世纪元 皮衣外套</div>
-        <div class="sim-el promo-line" data-lv="5" data-sp="超级立减百分之十二">超级立减 12%</div>
-        <div class="price-row">
-          <div class="sim-el" data-lv="4" data-sp="七百零三元"><span class="yen">¥</span><span class="num">703</span></div>
-          <div class="sim-el after" data-lv="5" data-sp="券后价">券后价</div>
-        </div>
-        <div class="foot"><div class="sim-el fav" data-lv="5" data-sp="一千八百四十九人收藏">☆ 1849</div></div>
+    <div class="sk-row" id="seckill">
+      <div class="sim-el sk-item" data-lv="2" data-sp="秒杀，无线耳机，十九元九">
+        <div class="sim-el sk-img" data-lv="4" data-sp="图片，无线耳机" style="background:#eceff1">🎧</div>
+        <div class="sim-el sk-pr" data-lv="4" data-sp="十九元九">¥19.9</div>
+        <div class="sim-el sk-was" data-lv="5" data-sp="原价一百二十九元">¥129</div>
       </div>
-    </div>
-
-    <div class="sim-el card" data-lv="2" data-sp="小米智能哑铃，回头客超五百万的好店，券后价一百五十六元二角，收藏一万以上">
-      <div class="sim-el cover" data-lv="4" data-sp="图片，智能哑铃" style="background:linear-gradient(180deg,#eceff1,#90a4ae)">🏋️<span class="sim-el play" data-lv="4" data-sp="视频，按钮">▶</span></div>
-      <div class="body">
-        <div class="sim-el title" data-lv="3" data-sp="天猫，小米智能哑铃"><span class="tmall">天猫</span>小米官方米家智能哑铃</div>
-        <div class="sim-el promo-line" data-lv="5" data-sp="回头客超五百万的好店">回头客超 500 万的好店</div>
-        <div class="price-row">
-          <div class="sim-el" data-lv="4" data-sp="一百五十六元二角"><span class="yen">¥</span><span class="num">156.22</span></div>
-          <div class="sim-el after" data-lv="5" data-sp="券后价">券后价</div>
-        </div>
-        <div class="foot"><div class="sim-el fav" data-lv="5" data-sp="收藏一万以上">☆ 1万+</div></div>
+      <div class="sim-el sk-item" data-lv="2" data-sp="秒杀，保温杯，二十九元">
+        <div class="sim-el sk-img" data-lv="4" data-sp="图片，保温杯" style="background:#e3f2fd">🫗</div>
+        <div class="sim-el sk-pr" data-lv="4" data-sp="二十九元">¥29</div>
+        <div class="sim-el sk-was" data-lv="5" data-sp="原价八十九元">¥89</div>
       </div>
-    </div>
-
-    <div class="sim-el card" data-lv="2" data-sp="清仓香水，超级立减百分之十，先用后付，券后价三十元四角五，收藏二万以上">
-      <div class="sim-el cover" data-lv="4" data-sp="图片，香水" style="background:linear-gradient(180deg,#fff8e1,#ffcc80)">🧴</div>
-      <div class="body">
-        <div class="sim-el title" data-lv="3" data-sp="清仓特惠，香水小样">【清仓特惠】香水小样</div>
-        <div class="sim-el promo-line" data-lv="5" data-sp="超级立减百分之十">超级立减 10% <span class="ok">先用后付</span></div>
-        <div class="price-row">
-          <div class="sim-el" data-lv="4" data-sp="三十元四角五"><span class="yen">¥</span><span class="num">30.45</span></div>
-          <div class="sim-el after" data-lv="5" data-sp="券后价">券后价</div>
-        </div>
-        <div class="foot"><div class="sim-el fav" data-lv="5" data-sp="收藏二万以上">☆ 2万+</div></div>
+      <div class="sim-el sk-item" data-lv="2" data-sp="秒杀，手机支架，九点九元">
+        <div class="sim-el sk-img" data-lv="4" data-sp="图片，手机支架" style="background:#fff3e0">📱</div>
+        <div class="sim-el sk-pr" data-lv="4" data-sp="九点九元">¥9.9</div>
+        <div class="sim-el sk-was" data-lv="5" data-sp="原价三十九元">¥39</div>
       </div>
-    </div>
-
-    <div class="sim-el card" data-lv="2" data-sp="肥皂壁挂，四点八元，七千二百三十二人收藏">
-      <div class="sim-el cover" data-lv="4" data-sp="图片，肥皂壁挂" style="background:linear-gradient(180deg,#e0f2f1,#80cbc4)">🧼<span class="sim-el play" data-lv="4" data-sp="视频，按钮">▶</span></div>
-      <div class="body">
-        <div class="sim-el title" data-lv="3" data-sp="肥皂上墙，免打孔">肥皂上墙 免打孔壁挂</div>
-        <div class="price-row">
-          <div class="sim-el" data-lv="4" data-sp="四点八元"><span class="yen">¥</span><span class="num">4.8</span></div>
-        </div>
-        <div class="foot"><div class="sim-el fav" data-lv="5" data-sp="七千二百三十二人收藏">☆ 7232</div></div>
+      <div class="sim-el sk-item" data-lv="2" data-sp="秒杀，充电宝，四十九元">
+        <div class="sim-el sk-img" data-lv="4" data-sp="图片，充电宝" style="background:#e8eaf6">🔋</div>
+        <div class="sim-el sk-pr" data-lv="4" data-sp="四十九元">¥49</div>
+        <div class="sim-el sk-was" data-lv="5" data-sp="原价一百二十九元">¥129</div>
       </div>
-    </div>
-
-    <div class="sim-el card" data-lv="2" data-sp="绿植盆栽，三十元，六百三十五人收藏">
-      <div class="sim-el cover" data-lv="4" data-sp="图片，绿植" style="background:linear-gradient(180deg,#e8f5e9,#66bb6a)">🌿</div>
-      <div class="body">
-        <div class="sim-el title" data-lv="3" data-sp="好养绿植盆栽">好养又好看的绿植盆栽</div>
-        <div class="price-row">
-          <div class="sim-el" data-lv="4" data-sp="三十元"><span class="yen">¥</span><span class="num">30</span></div>
-        </div>
-        <div class="foot"><div class="sim-el fav" data-lv="5" data-sp="六百三十五人收藏">☆ 635</div></div>
+      <div class="sim-el sk-item" data-lv="2" data-sp="秒杀，运动鞋，八十九元">
+        <div class="sim-el sk-img" data-lv="4" data-sp="图片，运动鞋" style="background:#efebe9">👟</div>
+        <div class="sim-el sk-pr" data-lv="4" data-sp="八十九元">¥89</div>
+        <div class="sim-el sk-was" data-lv="5" data-sp="原价二百五十九元">¥259</div>
+      </div>
+      <div class="sim-el sk-item" data-lv="2" data-sp="秒杀，面膜十片，三十九元九">
+        <div class="sim-el sk-img" data-lv="4" data-sp="图片，面膜" style="background:#fce4ec">✨</div>
+        <div class="sim-el sk-pr" data-lv="4" data-sp="三十九元九">¥39.9</div>
+        <div class="sim-el sk-was" data-lv="5" data-sp="原价一百一十九元">¥119</div>
       </div>
     </div>
   </div>
+
+  <div class="guess">
+    <i></i>
+    <div class="sim-el" data-lv="1" data-sp="猜你喜欢">猜你喜欢</div>
+    <i></i>
+  </div>
+  <div class="feed" id="feed"></div>
 </div>
 
 <div id="coupon">
@@ -337,16 +393,76 @@
 <div id="hit"></div>
 <button type="button" id="gate">点击屏幕开始<small>单指滑动朗读 · 双指翻页</small></button>
 <script>
+(function renderFeed() {
+  const items = [
+    { obj: "🕯️", bg: "radial-gradient(ellipse at 50% 38%, #fff 0%, transparent 42%), linear-gradient(180deg,#faf6f0,#e2c9a8)", img: "图片，香薰蜡烛", tmall: 1, title: "香薰蜡烛礼盒 卧室香氛持久留香伴手礼", tsp: "天猫，香薰蜡烛礼盒卧室香氛", tags: [["p-o", "超级立减百分之十", "超级立减 10%"]], price: "158", psp: "一百五十八元", after: 1, fav: "☆ 316", fsp: "三百一十六人收藏", shop: "无印良品官方旗舰店", ssp: "无印良品官方旗舰店", sp: "香薰蜡烛，超级立减百分之十，券后价一百五十八元，三百一十六人收藏" },
+    { obj: "🧥", bg: "linear-gradient(180deg,#3a3a3a 0%,#111 70%)", img: "图片，皮衣外套", title: "创世纪元 皮衣外套女春秋新款机车服", tsp: "创世纪元皮衣外套", tags: [["p-o", "超级立减百分之十二", "超级立减 12%"]], price: "703", psp: "七百零三元", after: 1, fav: "☆ 1849", fsp: "一千八百四十九人收藏", sp: "皮衣外套，超级立减百分之十二，券后价七百零三元，一千八百四十九人收藏" },
+    { obj: "🏋️", bg: "linear-gradient(180deg,#eceff1,#90a4ae)", img: "图片，智能哑铃", video: 1, tmall: 1, title: "小米官方米家智能哑铃可调节男女健身", tsp: "天猫，小米智能哑铃", tags: [["p-d", "回头客超五百万的好店", "回头客超 500 万的好店"]], price: "156.22", psp: "一百五十六元二角", after: 1, fav: "☆ 1万+", fsp: "收藏一万以上", shop: "小米官方旗舰店", ssp: "小米官方旗舰店", sp: "小米智能哑铃，回头客超五百万的好店，券后价一百五十六元二角，收藏一万以上" },
+    { obj: "🧴", bg: "linear-gradient(180deg,#fff8e1,#ffcc80)", img: "图片，香水", title: "【清仓特惠】香水小样女士持久淡香", tsp: "清仓特惠，香水小样", tags: [["p-o", "超级立减百分之十", "超级立减 10%"], ["p-g", "先用后付", "先用后付"]], price: "30.45", psp: "三十元四角五", after: 1, fav: "☆ 2万+", fsp: "收藏二万以上", sp: "清仓香水，超级立减百分之十，先用后付，券后价三十元四角五，收藏二万以上" },
+    { obj: "🧼", bg: "linear-gradient(180deg,#e0f2f1,#80cbc4)", img: "图片，肥皂壁挂", video: 1, title: "肥皂上墙免打孔壁挂沥水置物架", tsp: "肥皂上墙，免打孔", tags: [["chip", "包邮", "包邮"]], price: "4.8", psp: "四点八元", fav: "☆ 7232", fsp: "七千二百三十二人收藏", sp: "肥皂壁挂，四点八元，七千二百三十二人收藏" },
+    { obj: "🌿", bg: "linear-gradient(180deg,#e8f5e9,#66bb6a)", img: "图片，绿植", title: "好养又好看的绿植盆栽室内净化空气", tsp: "好养绿植盆栽", price: "30", psp: "三十元", fav: "☆ 635", fsp: "六百三十五人收藏", shop: "花田小院", ssp: "花田小院", sp: "绿植盆栽，三十元，六百三十五人收藏" },
+    { obj: "🎧", bg: "linear-gradient(180deg,#fafafa,#cfd8dc)", img: "图片，无线耳机", tmall: 1, title: "降噪蓝牙耳机无线入耳运动超长续航", tsp: "天猫，降噪蓝牙耳机", tags: [["chip", "百亿补贴", "百亿补贴"], ["chip g", "官方正品", "官方正品"]], price: "99.9", psp: "九十九元九", after: 1, fav: "☆ 8.2万", fsp: "八万二千人收藏", ad: 1, sp: "无线耳机，百亿补贴，券后价九十九元九，八万二千人收藏" },
+    { obj: "💄", bg: "linear-gradient(180deg,#fce4ec,#f48fb1)", img: "图片，口红", live: 1, tmall: 1, title: "丝绒口红哑光不掉色显白唇膏礼盒", tsp: "天猫，丝绒口红", tags: [["p-o", "直播间立减二十", "直播间立减二十"], ["chip", "满减券", "满减券"]], price: "89", psp: "八十九元", after: 1, fav: "☆ 3万+", fsp: "收藏三万以上", sp: "口红，直播间立减二十，券后价八十九元，收藏三万以上" },
+    { obj: "👟", bg: "linear-gradient(180deg,#efebe9,#a1887f)", img: "图片，运动鞋", title: "透气运动鞋男夏季网面跑步休闲鞋", tsp: "运动鞋男夏季", tags: [["chip", "国补", "国补"], ["p-o", "超级立减百分之八", "超级立减 8%"]], price: "129", psp: "一百二十九元", after: 1, fav: "☆ 1.6万", fsp: "一万六千人收藏", sp: "运动鞋，国补，超级立减百分之八，券后价一百二十九元，一万六千人收藏" },
+    { obj: "🛏️", bg: "linear-gradient(180deg,#f3e5f5,#ce93d8)", img: "图片，四件套", tmall: 1, title: "纯棉四件套全棉被套床单床笠三件套", tsp: "天猫，纯棉四件套", tags: [["p-d", "回头客超一百万的好店", "回头客超 100 万的好店"], ["chip", "包邮", "包邮"]], price: "168", psp: "一百六十八元", after: 1, fav: "☆ 5万+", fsp: "收藏五万以上", sp: "四件套，回头客超一百万的好店，券后价一百六十八元，收藏五万以上" },
+    { obj: "🍪", bg: "linear-gradient(180deg,#fff8e1,#ffcc80)", img: "图片，零食礼包", title: "网红零食大礼包整箱小吃休闲食品", tsp: "零食大礼包", tags: [["chip", "满39减5", "满三十九减五"], ["p-g", "晚发必赔", "晚发必赔"]], price: "39.9", psp: "三十九元九", after: 1, fav: "☆ 12万+", fsp: "收藏十二万以上", sp: "零食大礼包，满三十九减五，券后价三十九元九，收藏十二万以上" },
+    { obj: "🍼", bg: "linear-gradient(180deg,#e3f2fd,#90caf9)", img: "图片，奶瓶", tmall: 1, title: "婴儿奶瓶防胀气宽口径新生儿礼盒", tsp: "天猫，婴儿奶瓶", tags: [["chip", "母婴精选", "母婴精选"], ["chip g", "正品保障", "正品保障"]], price: "79", psp: "七十九元", after: 1, fav: "☆ 9402", fsp: "九千四百零二人收藏", shop: "母婴旗舰店", ssp: "母婴旗舰店", sp: "婴儿奶瓶，母婴精选，券后价七十九元，九千四百零二人收藏" },
+    { obj: "⛺", bg: "linear-gradient(180deg,#e8f5e9,#81c784)", img: "图片，帐篷", video: 1, title: "全自动户外帐篷防雨防晒野营装备", tsp: "户外自动帐篷", tags: [["p-o", "超级立减百分之十五", "超级立减 15%"]], price: "268", psp: "二百六十八元", after: 1, fav: "☆ 4210", fsp: "四千二百一十人收藏", sp: "帐篷，超级立减百分之十五，券后价二百六十八元，四千二百一十人收藏" },
+    { obj: "📱", bg: "linear-gradient(180deg,#eceff1,#607d8b)", img: "图片，手机", tmall: 1, title: "全新5G智能手机官方正品国补专区", tsp: "天猫，智能手机国补", tags: [["chip", "国家补贴", "国家补贴"], ["chip", "百亿补贴", "百亿补贴"]], price: "1299", psp: "一千二百九十九元", after: 1, fav: "☆ 2.1万", fsp: "二万一千人收藏", ad: 1, sp: "智能手机，国家补贴，百亿补贴，券后价一千二百九十九元，二万一千人收藏" },
+    { obj: "🚗", bg: "linear-gradient(180deg,#eceff1,#90a4ae)", img: "图片，汽车坐垫", title: "汽车坐垫四季通用通风座套座椅垫", tsp: "汽车坐垫四季通用", tags: [["chip k", "48小时发货", "四十八小时发货"]], price: "45", psp: "四十五元", fav: "☆ 1876", fsp: "一千八百七十六人收藏", sp: "汽车坐垫，四十五元，一千八百七十六人收藏" },
+    { obj: "👗", bg: "linear-gradient(180deg,#fce4ec,#f8bbd0)", img: "图片，连衣裙", title: "夏季新款碎花连衣裙女显瘦中长裙", tsp: "碎花连衣裙", tags: [["p-o", "超级立减百分之十", "超级立减 10%"], ["p-g", "先用后付", "先用后付"]], price: "89", psp: "八十九元", after: 1, fav: "☆ 6.3万", fsp: "六万三千人收藏", sp: "连衣裙，超级立减百分之十，先用后付，券后价八十九元，六万三千人收藏" },
+    { obj: "☕", bg: "linear-gradient(180deg,#efebe9,#bcaaa4)", img: "图片，咖啡机", tmall: 1, title: "家用全自动咖啡机研磨一体小型", tsp: "天猫，家用咖啡机", tags: [["chip", "新品", "新品"], ["p-d", "买过的人都说好", "买过的人都说好"]], price: "599", psp: "五百九十九元", after: 1, fav: "☆ 1.1万", fsp: "一万一千人收藏", shop: "厨房电器旗舰店", ssp: "厨房电器旗舰店", sp: "咖啡机，新品，券后价五百九十九元，一万一千人收藏" },
+    { obj: "🐱", bg: "linear-gradient(180deg,#fff8e1,#ffe082)", img: "图片，猫粮", title: "成猫幼猫全价猫粮营养增肥发腮", tsp: "全价猫粮", tags: [["chip", "满99减15", "满九十九减十五"]], price: "68", psp: "六十八元", after: 1, fav: "☆ 9万+", fsp: "收藏九万以上", sp: "猫粮，满九十九减十五，券后价六十八元，收藏九万以上" },
+    { obj: "✨", bg: "linear-gradient(180deg,#f3e5f5,#ce93d8)", img: "图片，护肤套装", tmall: 1, title: "护肤套装补水保湿精华水乳礼盒", tsp: "天猫，护肤套装", tags: [["chip", "奢品精选", "奢品精选"], ["p-o", "超级立减百分之十八", "超级立减 18%"]], price: "3280", psp: "三千二百八十元", after: 1, fav: "☆ 5200", fsp: "五千二百人收藏", sp: "护肤套装，奢品精选，超级立减百分之十八，券后价三千二百八十元，五千二百人收藏" },
+    { obj: "⌚", bg: "linear-gradient(180deg,#eceff1,#455a64)", img: "图片，手表", video: 1, title: "智能手表心率血氧运动户外圆盘", tsp: "智能手表", tags: [["chip", "数码热卖", "数码热卖"], ["chip g", "官方验货", "官方验货"]], price: "199", psp: "一百九十九元", after: 1, fav: "☆ 2.8万", fsp: "二万八千人收藏", sp: "智能手表，数码热卖，券后价一百九十九元，二万八千人收藏" }
+  ];
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  }
+  document.getElementById("feed").innerHTML = items.map(function (p) {
+    var tags = (p.tags || []).map(function (t) {
+      return '<div class="sim-el ' + t[0] + '" data-lv="5" data-sp="' + esc(t[1]) + '">' + esc(t[2]) + "</div>";
+    }).join("");
+    return '<div class="sim-el card" data-lv="2" data-sp="' + esc(p.sp) + '">' +
+      '<div class="sim-el cover" data-lv="4" data-sp="' + esc(p.img) + '" style="background:' + p.bg + '">' +
+        (p.live ? '<div class="sim-el live" data-lv="5" data-sp="正在直播">直播</div>' : "") +
+        (p.video && !p.live ? '<div class="sim-el play" data-lv="4" data-sp="视频，按钮">▶</div>' : "") +
+        '<span class="obj">' + p.obj + "</span>" +
+        (p.ad ? '<div class="sim-el ad" data-lv="5" data-sp="广告">广告</div>' : "") +
+      "</div><div class=\"body\">" +
+        '<div class="sim-el title" data-lv="3" data-sp="' + esc(p.tsp) + '">' +
+          (p.tmall ? '<span class="tmall">天猫</span>' : "") + esc(p.title) +
+        "</div>" +
+        (tags ? '<div class="tags">' + tags + "</div>" : "") +
+        (p.shop ? '<div class="sim-el shop" data-lv="5" data-sp="' + esc(p.ssp) + '">' + esc(p.shop) + "</div>" : "") +
+        '<div class="price-row">' +
+          '<div class="sim-el" data-lv="4" data-sp="' + esc(p.psp) + '"><span class="yen">¥</span><span class="num">' + esc(p.price) + "</span></div>" +
+          (p.after ? '<div class="sim-el after" data-lv="5" data-sp="券后价">券后价</div>' : "") +
+          '<div class="sim-el fav" data-lv="5" data-sp="' + esc(p.fsp) + '">' + esc(p.fav) + "</div>" +
+          '<div class="sim-el more" data-lv="5" data-sp="看相似，按钮">···</div>' +
+        "</div></div></div>";
+  }).join("");
+})();
+
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
 const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.15;
 const SPEECH_RATE = 4, SPEECH_VOL = 0.8;
 const page = document.getElementById("page");
 const tabs = document.getElementById("tabs");
+const icons = document.getElementById("icons");
+const seckill = document.getElementById("seckill");
 const hit = document.getElementById("hit");
 const gate = document.getElementById("gate");
 document.querySelectorAll(".sim-el").forEach(function (el, i) { el.dataset.id = "n" + i; });
+icons.addEventListener("scroll", function () {
+  const w = icons.clientWidth || 1;
+  const i = Math.round(icons.scrollLeft / w);
+  document.querySelectorAll(".dots .doti").forEach(function (d, n) {
+    d.classList.toggle("on", n === i);
+  });
+});
 
-let ctx = null, lastId = null, lastTap = 0, armed = false, pan = null, mandarinVoice = null;
+let ctx = null, lastId = null, lastTap = 0, armed = false, pan = null, panAxis = "page", mandarinVoice = null;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -428,9 +544,25 @@ function midpoint(touches) {
   }
   return { x: x / touches.length, y: y / touches.length };
 }
+function inRect(el, y) {
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return y >= r.top && y <= r.bottom;
+}
+function axisForY(y) {
+  if (inRect(tabs, y)) return "tabs";
+  if (inRect(icons, y)) return "icons";
+  if (inRect(seckill, y)) return "seckill";
+  return "page";
+}
 function onTouchStart(e) {
   e.preventDefault();
-  if (e.touches.length >= 2) { pan = midpoint(e.touches); speechSynthesis.cancel(); return; }
+  if (e.touches.length >= 2) {
+    pan = midpoint(e.touches);
+    panAxis = axisForY(pan.y);
+    speechSynthesis.cancel();
+    return;
+  }
   const now = Date.now();
   if (now - lastTap < 380 && lastId) {
     const cur = document.querySelector(".sim-el.on");
@@ -446,8 +578,11 @@ function onTouchMove(e) {
   if (e.touches.length >= 2) {
     const p = midpoint(e.touches);
     if (pan) {
-      page.scrollTop += pan.y - p.y;
-      tabs.scrollLeft += pan.x - p.x;
+      const dx = pan.x - p.x, dy = pan.y - p.y;
+      if (panAxis === "tabs") tabs.scrollLeft += dx;
+      else if (panAxis === "icons") icons.scrollLeft += dx;
+      else if (panAxis === "seckill") seckill.scrollLeft += dx;
+      else page.scrollTop += dy;
     }
     pan = p;
     return;
