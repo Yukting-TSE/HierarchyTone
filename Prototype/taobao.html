@@ -477,9 +477,9 @@
 })();
 
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
-const DUR = 0.38, ATT = 0.02, REL = 0.08, DLY = 0.22;
-const LOUD = [0.22, 0.24, 0.28, 0.34, 0.42, 0.52];
-const SPEECH_RATE = 2, SPEECH_VOL = 1, GUIDE_RATE = 2;
+const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.28;
+const LOUD = [1, 1.15, 1.35, 1.6, 1.9, 2.25];
+const SPEECH_RATE = 4, SPEECH_VOL = 0.8, GUIDE_RATE = 1.15;
 const page = document.getElementById("page");
 const tabs = document.getElementById("tabs");
 const icons = document.getElementById("icons");
@@ -498,7 +498,7 @@ icons.addEventListener("scroll", function () {
   });
 });
 
-let ctx = null, master = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
+let ctx = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
 let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
@@ -555,11 +555,6 @@ function ensureAudio() {
   if (navigator.audioSession) { try { navigator.audioSession.type = "playback"; } catch (err) {} }
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state === "suspended") ctx.resume();
-  if (!master) {
-    master = ctx.createGain();
-    master.gain.value = 0.72;
-    master.connect(ctx.destination);
-  }
   return ctx;
 }
 function stopTones() {
@@ -582,19 +577,19 @@ function playTone(lv) {
   if (c.state === "suspended") c.resume();
   stopTones();
   const i = levelIndex(lv);
-  const f = F[i] || 523.25, t0 = c.currentTime, amp0 = LOUD[i] || 0.28;
-  [[1, 1], [2, i >= 3 ? 0.22 : 0.12], [3, i >= 3 ? 0.08 : 0.04]].forEach(function (h) {
+  const f = F[i] || 523.25, t0 = c.currentTime, g0 = 0.22 * (LOUD[i] || 1);
+  [[1, 1], [2, 0.22], [3, 0.1], [4, 0.05]].forEach(function (h) {
     const o = c.createOscillator(), g = c.createGain();
-    const amp = amp0 * h[1];
+    const amp = Math.min(0.58, g0 * h[1]);
     o.type = "sine";
     o.frequency.setValueAtTime(f * h[0], t0);
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(amp, t0 + ATT);
-    g.gain.linearRampToValueAtTime(amp * 0.9, t0 + DUR - REL);
-    g.gain.linearRampToValueAtTime(0, t0 + DUR);
-    o.connect(g); g.connect(master);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(amp, t0 + ATT);
+    g.gain.setValueAtTime(amp, t0 + DUR - REL);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + DUR);
+    o.connect(g); g.connect(c.destination);
     o._gain = g;
-    o.start(t0); o.stop(t0 + DUR + 0.03);
+    o.start(t0); o.stop(t0 + DUR + 0.02);
     liveOsc.push(o);
   });
 }
@@ -715,7 +710,7 @@ function playTriple(lv, name, done) {
     setTimeout(function () {
       if (gen !== demoGen) return;
       speak(name, GUIDE_RATE);
-      setTimeout(function () { n += 1; one(); }, 1000);
+      setTimeout(function () { n += 1; one(); }, 1400);
     }, (DUR + 0.08) * 1000);
   }
   one();
