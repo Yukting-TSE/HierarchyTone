@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111111">
+<link rel="manifest" href="manifest-touch-probe.json">
 <title>HierarchyTone · iPad 触探探针</title>
 <style>
   html, body {
@@ -15,55 +19,72 @@
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
   }
-  #stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; overscroll-behavior: none; }
+  #stage {
+    position: fixed; inset: 0;
+    overflow: hidden; touch-action: none; overscroll-behavior: none;
+  }
   #ui {
     position: absolute; inset: 0;
-    display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 18vh;
-    gap: 8px; padding: 72px 12px 24px;
-    overflow: hidden; touch-action: none;
+    display: grid; grid-template-columns: 1fr 1fr;
+    grid-auto-rows: minmax(22vh, auto);
+    gap: 10px;
+    padding: calc(88px + env(safe-area-inset-top)) 12px calc(28px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+    overflow-y: auto;
+    touch-action: none;
+    -webkit-overflow-scrolling: auto;
   }
   .cell {
     background: #2a2a2e; border-radius: 12px;
     display: flex; flex-direction: column; justify-content: center;
-    padding: 12px; outline: 3px solid transparent;
+    min-height: 22vh;
+    padding: 16px; outline: 4px solid transparent;
   }
   .cell.on { background: #3b3b90; outline-color: #8ab4ff; }
-  .cell .lv { font-size: 12px; opacity: .55; }
-  .cell .name { font-size: 18px; font-weight: 600; }
+  .cell .lv { font-size: 14px; opacity: .55; }
+  .cell .name { font-size: 22px; font-weight: 600; }
   #hud {
     position: absolute; top: 0; left: 0; right: 0;
-    padding: 10px 12px calc(8px + env(safe-area-inset-top));
-    background: #000; font-size: 13px; line-height: 1.45;
+    padding: calc(12px + env(safe-area-inset-top)) 14px 10px;
+    background: #000; font-size: 16px; line-height: 1.45;
     z-index: 2; pointer-events: none;
   }
   #hud b { color: #8ab4ff; }
   #hit { position: absolute; inset: 0; z-index: 5; touch-action: none; }
-  #arm {
-    position: absolute; z-index: 6; left: 50%; top: 50%;
-    transform: translate(-50%, -50%);
-    padding: 18px 28px; font-size: 18px; border: 0; border-radius: 12px;
-    background: #4c6fff; color: #fff;
+  #gate {
+    position: absolute; inset: 0; z-index: 8;
+    background: #111;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+    padding: 32px 24px;
+    font-size: 28px; font-weight: 700; line-height: 1.5;
+    touch-action: none;
   }
 </style>
 </head>
 <body>
 <div id="stage">
-  <div id="hud">未开始 · 先点按钮解锁声音<br>若滑动时页面跟着走，说明滚动没锁住</div>
+  <div id="hud">点击屏幕任意位置开始</div>
   <div id="ui"></div>
   <div id="hit"></div>
-  <button id="arm" type="button">点一下开始触探（解锁音频）</button>
+  <div id="gate">点击屏幕任意位置开始测试</div>
 </div>
 <script>
 const ITEMS = [
   ["L1", "顶部导航"], ["L1", "搜索框"], ["L2", "频道 · 推荐"], ["L2", "频道 · 热榜"],
   ["L3", "新闻卡片甲"], ["L3", "新闻卡片乙"], ["L4", "标题文字"], ["L5", "配图"],
-  ["L3", "商品卡片"], ["L4", "价格 59 元"], ["L2", "底部标签栏"], ["L1", "购物车"]
+  ["L3", "商品卡片"], ["L4", "价格 59 元"], ["L2", "底部标签栏"], ["L1", "购物车"],
+  ["L2", "限时秒杀"], ["L3", "耳机 59 元"], ["L3", "水杯 29 元"], ["L4", "猜你喜欢"],
+  ["L5", "商品主图"], ["L3", "连衣裙"], ["L1", "消息中心"], ["L2", "体育频道"]
 ];
 const FREQ = { L1: 523, L2: 392, L3: 294, L4: 220, L5: 165, L6: 123 };
+const SPEECH_RATE = 4;
 const ui = document.getElementById("ui");
 const hud = document.getElementById("hud");
 const hit = document.getElementById("hit");
-const arm = document.getElementById("arm");
+const gate = document.getElementById("gate");
+
 ITEMS.forEach(([lv, name], i) => {
   const el = document.createElement("div");
   el.className = "cell";
@@ -73,16 +94,45 @@ ITEMS.forEach(([lv, name], i) => {
   el.innerHTML = '<span class="lv">' + lv + '</span><span class="name">' + name + "</span>";
   ui.appendChild(el);
 });
-let ctx = null, lastId = null, lastTap = 0, armed = false;
+
+let ctx = null, lastId = null, lastTap = 0, armed = false, panY = null, zhVoice = null;
+
+function pickZhVoice() {
+  const vs = speechSynthesis.getVoices() || [];
+  const cn = vs.filter((v) => /^zh(-|_)?cn/i.test(v.lang) || /中国|普通话/i.test(v.name));
+  const prefer = cn.find((v) => /普通话|Mandarin|Tingting|Ting-Ting|Meijia|Xiaoxiao|Huihui/i.test(v.name));
+  return prefer || cn[0] || vs.find((v) => /^zh/i.test(v.lang)) || null;
+}
+speechSynthesis.addEventListener("voiceschanged", () => { zhVoice = pickZhVoice(); });
+zhVoice = pickZhVoice();
+
+function isStandalone() {
+  return window.navigator.standalone === true ||
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches;
+}
+
+function tryFullscreen() {
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen;
+  if (!req) return;
+  try { req.call(el); } catch (err) {}
+}
+
 function unlock() {
+  if (armed) return;
   ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state === "suspended") ctx.resume();
   armed = true;
-  arm.remove();
+  zhVoice = pickZhVoice();
+  tryFullscreen();
+  gate.remove();
   beep(440, 0.12);
-  speak("开始触探。手指按在屏幕上滑动。");
-  hud.innerHTML = "已解锁 · 按住滑动读元素 · 快速点两下为选中";
+  const extra = isStandalone() ? "" : "若碰到顶部工具栏，请用分享、添加到主屏幕，再从桌面打开。";
+  speak("开始测试。单指滑动朗读。双指滑动翻页。" + extra);
+  hud.innerHTML = "单指滑动朗读 · 双指滑动翻页 · 快按两下选中";
 }
+
 function beep(freq, dur) {
   if (!ctx) return;
   const o = ctx.createOscillator();
@@ -94,41 +144,61 @@ function beep(freq, dur) {
   o.connect(g); g.connect(ctx.destination);
   o.start(); o.stop(ctx.currentTime + dur);
 }
+
 function speak(text) {
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "zh-CN";
-  u.rate = 1;
+  u.rate = SPEECH_RATE;
+  if (!zhVoice) zhVoice = pickZhVoice();
+  if (zhVoice) u.voice = zhVoice;
   speechSynthesis.speak(u);
 }
+
 function elementFromTouch(t) {
   hit.style.pointerEvents = "none";
   const el = document.elementFromPoint(t.clientX, t.clientY);
   hit.style.pointerEvents = "auto";
   return el && el.closest ? el.closest(".cell") : null;
 }
+
 function explore(t) {
   const cell = elementFromTouch(t);
   document.querySelectorAll(".cell.on").forEach((n) => n.classList.remove("on"));
   if (!cell) {
     lastId = null;
-    hud.innerHTML = "离开元素 · x=" + Math.round(t.clientX) + " y=" + Math.round(t.clientY);
+    hud.innerHTML = "离开元素";
     speechSynthesis.cancel();
     return;
   }
   cell.classList.add("on");
-  hud.innerHTML = "<b>" + cell.dataset.lv + "</b> " + cell.dataset.sp +
-    " · x=" + Math.round(t.clientX) + " y=" + Math.round(t.clientY);
+  hud.innerHTML = "<b>" + cell.dataset.lv + "</b> " + cell.dataset.sp;
   if (cell.dataset.id === lastId) return;
   lastId = cell.dataset.id;
   beep(FREQ[cell.dataset.lv] || 300, 0.18);
   setTimeout(() => {
     if (lastId === cell.dataset.id) speak(cell.dataset.lv + "，" + cell.dataset.sp);
-  }, 220);
+  }, 160);
 }
+
+function midpointY(touches) {
+  let y = 0;
+  for (let i = 0; i < touches.length; i++) y += touches[i].clientY;
+  return y / touches.length;
+}
+
 function onTouchStart(e) {
   e.preventDefault();
-  if (!armed) return;
+  if (!armed) {
+    unlock();
+    if (e.touches.length === 1) explore(e.touches[0]);
+    return;
+  }
+  if (e.touches.length >= 2) {
+    panY = midpointY(e.touches);
+    speechSynthesis.cancel();
+    return;
+  }
   const now = Date.now();
   if (now - lastTap < 380 && lastId) {
     const cur = document.querySelector(".cell.on");
@@ -140,20 +210,35 @@ function onTouchStart(e) {
   lastTap = now;
   explore(e.changedTouches[0]);
 }
+
 function onTouchMove(e) {
   e.preventDefault();
   if (!armed) return;
+  if (e.touches.length >= 2) {
+    const y = midpointY(e.touches);
+    if (panY != null) ui.scrollTop += panY - y;
+    panY = y;
+    hud.innerHTML = "双指翻页";
+    return;
+  }
+  panY = null;
   explore(e.changedTouches[0]);
 }
+
+function onTouchEnd(e) {
+  e.preventDefault();
+  if (e.touches.length < 2) panY = null;
+}
+
 function bind(el) {
   el.addEventListener("touchstart", onTouchStart, { passive: false });
   el.addEventListener("touchmove", onTouchMove, { passive: false });
-  el.addEventListener("touchend", (e) => e.preventDefault(), { passive: false });
+  el.addEventListener("touchend", onTouchEnd, { passive: false });
+  el.addEventListener("touchcancel", onTouchEnd, { passive: false });
 }
 bind(hit);
+bind(gate);
 bind(document.body);
-arm.addEventListener("click", unlock);
-arm.addEventListener("touchend", (e) => { e.preventDefault(); unlock(); }, { passive: false });
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 </script>
 </body>

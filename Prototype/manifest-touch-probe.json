@@ -1,0 +1,9 @@
+{
+  "name": "HierarchyTone 触探",
+  "short_name": "触探",
+  "start_url": "./ipad-touch-probe.html",
+  "display": "fullscreen",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "lang": "zh-CN"
+}
