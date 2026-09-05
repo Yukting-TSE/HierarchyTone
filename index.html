@@ -1230,8 +1230,10 @@ function downloadLog() {
     const scored = (session.trials || []).filter(function (t) { return !t.phase; });
     const s = session.survey || {};
     const head = ["pid", "session_id", "vision", "sr_exp", "trial_i", "cond", "practice", "tid", "title", "success", "timeout", "started_at", "ended_at", "time_ms", "time_s", "n_errors", "n_focus", "pitch_disc", "pitch_layer", "which_better", "effort_c0", "effort_c1", "improve"];
+    const last = scored.length - 1;
     const rows = [head.join(",")].concat(scored.map(function (t, i) {
       const ms = t.time_ms || 0;
+      const surveyRow = i === last;
       return [
         csvCell(t.participant_id || pid),
         csvCell(t.session_id || sid),
@@ -1250,12 +1252,12 @@ function downloadLog() {
         (ms / 1000).toFixed(3),
         t.n_errors || 0,
         t.n_focus || 0,
-        csvCell(s.pitch_disc || ""),
-        csvCell(s.pitch_layer || ""),
-        csvCell(s.which_better || ""),
-        csvCell(s.effort_c0 || ""),
-        csvCell(s.effort_c1 || ""),
-        csvCell(s.improve || "")
+        csvCell(surveyRow ? (s.pitch_disc || "") : ""),
+        csvCell(surveyRow ? (s.pitch_layer || "") : ""),
+        csvCell(surveyRow ? (s.which_better || "") : ""),
+        csvCell(surveyRow ? (s.effort_c0 || "") : ""),
+        csvCell(surveyRow ? (s.effort_c1 || "") : ""),
+        csvCell(surveyRow ? (s.improve || "") : "")
       ].join(",");
     }));
     const csv = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
