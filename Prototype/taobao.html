@@ -7,142 +7,158 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>购物首页</title>
+<title>淘宝</title>
 <style>
   html, body {
     margin: 0; height: 100%; width: 100%;
     overflow: hidden; position: fixed; inset: 0;
     font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-    background: #f5f5f5; color: #333;
-    -webkit-user-select: none; user-select: none;
-    -webkit-touch-callout: none;
+    background: #f3f3f3; color: #333;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
   }
   #page {
     position: absolute; left: 0; right: 0; top: 0;
-    bottom: calc(64px + env(safe-area-inset-bottom));
+    bottom: calc(58px + env(safe-area-inset-bottom));
     overflow-x: hidden; overflow-y: auto;
-    touch-action: none; background: #f5f5f5;
+    touch-action: none;
+    background: #f3f3f3;
   }
   .sim-el { position: relative; outline: 3px solid transparent; outline-offset: -2px; }
   .sim-el.on { outline-color: #ff5000; z-index: 3; }
-  .tb-header {
-    background: #ff5000;
-    padding: calc(12px + env(safe-area-inset-top)) 14px 14px;
+
+  .top {
+    background: linear-gradient(180deg, #ff5000 0%, #ff6a00 72%, #f3f3f3 100%);
+    padding: calc(8px + env(safe-area-inset-top)) 12px 14px;
   }
-  .tb-sr { display: flex; align-items: center; gap: 10px; }
-  .tb-hi {
-    width: 44px; height: 44px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    color: #fff; font-size: 22px; position: relative;
+  .search-row { display: flex; align-items: center; gap: 8px; }
+  .ico {
+    width: 40px; height: 40px; flex-shrink: 0; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    position: relative;
   }
-  .tb-badge {
-    position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px;
-    background: #ff2d54; color: #fff; font-size: 11px; font-weight: 700;
-    border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 4px;
+  .badge {
+    position: absolute; top: 0; right: -2px; min-width: 16px; height: 16px;
+    background: #ff2d54; color: #fff; font-size: 10px; font-weight: 700;
+    border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 3px;
   }
-  .tb-sb {
-    flex: 1; height: 44px; background: #fff; border-radius: 22px;
-    display: flex; align-items: center; padding: 0 14px; gap: 8px;
+  .search {
+    flex: 1; height: 36px; background: #fff; border-radius: 18px;
+    display: flex; align-items: center; padding: 0 6px 0 12px; gap: 6px;
   }
-  .tb-sb .si { font-size: 16px; opacity: .4; }
-  .tb-sb .st { font-size: 16px; color: #999; flex: 1; }
-  .tb-sb .btn {
-    font-size: 14px; color: #fff; background: #ff5000;
-    padding: 6px 14px; border-radius: 16px; font-weight: 600;
+  .search .ph { flex: 1; font-size: 14px; color: #bbb; }
+  .search .cam { width: 32px; text-align: center; font-size: 16px; opacity: .55; }
+  .search .go {
+    height: 28px; padding: 0 12px; border-radius: 14px; background: #ff5000;
+    color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center;
   }
-  .tb-qnav {
+  .tabs { display: flex; gap: 18px; padding: 12px 6px 4px; color: rgba(255,255,255,.75); }
+  .tab { font-size: 15px; font-weight: 500; padding-bottom: 6px; }
+  .tab.on { color: #fff; font-weight: 800; font-size: 17px; position: relative; }
+  .tab.on::after {
+    content: ""; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+    width: 16px; height: 3px; background: #fff; border-radius: 2px;
+  }
+
+  .icons {
     display: flex; justify-content: space-around;
-    padding: 12px 6px 10px;
-    background: linear-gradient(180deg, #ff5000 0%, #f5f5f5 70%);
+    background: #fff; margin: 0 10px; border-radius: 12px 12px 0 0;
+    padding: 14px 4px 10px;
   }
-  .tb-qn { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 64px; }
-  .tb-qn-ic {
-    width: 52px; height: 52px; background: #fff; border-radius: 16px;
-    display: flex; align-items: center; justify-content: center; font-size: 26px;
-    box-shadow: 0 1px 6px rgba(0,0,0,.06);
+  .icon { width: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .icon .bub {
+    width: 44px; height: 44px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff;
   }
-  .tb-qn-lb { font-size: 13px; color: #333; text-align: center; }
-  .tb-cats {
+  .icon span { font-size: 11px; color: #333; }
+
+  .cats {
     display: grid; grid-template-columns: repeat(5, 1fr);
-    background: #fff; margin: 8px 10px 0; border-radius: 14px;
-    padding: 12px 4px 8px;
+    background: #fff; margin: 0 10px 10px; border-radius: 0 0 12px 12px;
+    padding: 4px 4px 12px; border-top: 1px solid #f6f6f6;
   }
-  .tb-cat { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 2px; }
-  .tb-cat-ic {
-    width: 48px; height: 48px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  .cat { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0; }
+  .cat .bub {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
   }
-  .tb-cat-lb { font-size: 13px; color: #555; }
-  .tb-banner {
-    margin: 10px; border-radius: 12px; overflow: hidden; height: 120px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 22px; font-weight: 700; color: #fff;
+  .cat span { font-size: 11px; color: #666; }
+
+  .twin { display: flex; gap: 8px; margin: 0 10px 10px; }
+  .twin .card {
+    flex: 1; height: 92px; border-radius: 12px; overflow: hidden; color: #fff;
+    padding: 12px 12px 10px; display: flex; flex-direction: column; justify-content: space-between;
   }
-  .tb-chs { display: flex; gap: 8px; padding: 0 10px; margin: 8px 0; }
-  .tb-ch {
-    flex: 1; min-width: 0; height: 56px; border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    gap: 6px; color: #fff; font-weight: 700; font-size: 14px;
+  .twin h3 { margin: 0; font-size: 16px; font-weight: 800; }
+  .twin p { margin: 0; font-size: 11px; opacity: .9; }
+  .live { background: linear-gradient(135deg, #1a1a1a, #c41a3a); }
+  .sub { background: linear-gradient(135deg, #6d28d9, #c084fc); }
+
+  .news {
+    margin: 0 10px 10px; background: #fff; border-radius: 12px;
+    padding: 10px 12px; display: flex; align-items: center; gap: 8px; font-size: 13px;
   }
-  .tb-sec {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 14px 8px;
+  .news b { color: #ff5000; font-size: 12px; flex-shrink: 0; }
+  .news span { color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .seckill {
+    margin: 0 10px 10px; background: #fff; border-radius: 12px; padding: 10px 10px 12px;
   }
-  .tb-sec .t { font-size: 18px; font-weight: 700; color: #222; }
-  .tb-sec .m { font-size: 13px; color: #999; }
-  .tb-flash { display: flex; gap: 8px; padding: 0 10px 8px; }
-  .tb-fi {
-    flex: 1; min-width: 0; background: #fff; border-radius: 12px; overflow: hidden;
+  .sk-hd { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 8px; }
+  .sk-logo { font-size: 16px; font-weight: 900; color: #ff2d54; letter-spacing: 1px; }
+  .clock { display: flex; align-items: center; gap: 3px; font-size: 11px; color: #999; }
+  .clock i {
+    display: inline-flex; min-width: 18px; height: 18px; padding: 0 3px;
+    background: #111; color: #fff; border-radius: 3px;
+    align-items: center; justify-content: center; font-style: normal; font-weight: 700;
   }
-  .tb-fi-img {
-    height: 88px; background: #f8f8f8;
-    display: flex; align-items: center; justify-content: center; font-size: 36px;
+  .sk-row { display: flex; gap: 8px; }
+  .sk-item { flex: 1; min-width: 0; }
+  .photo {
+    height: 86px; border-radius: 8px;
+    display: flex; align-items: flex-end; justify-content: center;
+    font-size: 34px; padding-bottom: 4px;
   }
-  .tb-fi-pr { padding: 6px 4px 10px; text-align: center; }
-  .tb-fi-now { font-size: 16px; font-weight: 700; color: #ff2d54; }
-  .tb-fi-was { font-size: 12px; color: #ccc; text-decoration: line-through; }
-  .tb-prods {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-    padding: 0 10px 16px;
+  .sk-price { text-align: center; margin-top: 4px; }
+  .now { color: #ff2d54; font-weight: 800; font-size: 14px; }
+  .was { color: #ccc; font-size: 11px; text-decoration: line-through; }
+
+  .feed-h { padding: 4px 14px 8px; font-size: 15px; font-weight: 800; color: #222; }
+  .feed { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 10px 16px; }
+  .goods { background: #fff; border-radius: 10px; overflow: hidden; }
+  .cover {
+    height: 168px; position: relative;
+    display: flex; align-items: center; justify-content: center; font-size: 52px;
   }
-  .tb-prod { background: #fff; border-radius: 12px; overflow: hidden; }
-  .tb-prod-img {
-    width: 100%; height: 160px; background: #f5f5f5;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 48px; color: #ccc; position: relative;
+  .tag {
+    position: absolute; left: 8px; top: 8px; background: #ff5000; color: #fff;
+    font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 3px;
   }
-  .tb-prod-tag {
-    position: absolute; top: 8px; left: 8px; font-size: 11px; font-weight: 600;
-    padding: 3px 6px; border-radius: 4px; color: #fff;
-  }
-  .tb-prod-bd { padding: 10px 12px 12px; }
-  .tb-prod-tt { font-size: 15px; color: #333; line-height: 1.4; }
-  .tb-prod-tt .st {
-    font-size: 11px; background: #ff5000; color: #fff;
-    padding: 1px 4px; border-radius: 3px; margin-right: 4px; font-weight: 600;
-  }
-  .tb-prod-rw { display: flex; align-items: baseline; justify-content: space-between; margin-top: 8px; }
-  .tb-prod-pr { font-size: 18px; font-weight: 700; color: #ff2d54; }
-  .tb-prod-pr .y { font-size: 12px; }
-  .tb-prod-sl { font-size: 12px; color: #bbb; }
-  .tb-spec { font-size: 12px; color: #888; margin-top: 4px; }
+  .tag.s { background: #7c3aed; }
+  .bd { padding: 8px 10px 10px; }
+  .tt { font-size: 13px; line-height: 1.45; color: #333; height: 36px; overflow: hidden; }
+  .meta { display: flex; align-items: baseline; justify-content: space-between; margin-top: 6px; }
+  .price { color: #ff2d54; font-weight: 800; font-size: 18px; }
+  .price em { font-style: normal; font-size: 12px; font-weight: 700; }
+  .sold { font-size: 11px; color: #bbb; }
+  .shop { font-size: 11px; color: #999; margin-top: 4px; }
+
   #tabbar {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
     display: flex; background: #fff; border-top: 1px solid #f0f0f0;
-    padding: 6px 0 calc(10px + env(safe-area-inset-bottom));
+    padding: 4px 0 calc(8px + env(safe-area-inset-bottom));
   }
-  .tb-tab {
-    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0;
+  .nav {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 0;
+    color: #999; font-size: 11px;
   }
-  .tb-tab-ic { font-size: 22px; opacity: .4; }
-  .tb-tab-lb { font-size: 12px; color: #999; }
-  .tb-tab.active .tb-tab-ic { opacity: 1; }
-  .tb-tab.active .tb-tab-lb { color: #ff5000; font-weight: 600; }
+  .nav .n { font-size: 22px; opacity: .45; }
+  .nav.on { color: #ff5000; font-weight: 700; }
+  .nav.on .n { opacity: 1; }
+
   #hit { position: absolute; inset: 0; z-index: 5; display: none; touch-action: none; }
   #gate {
-    position: absolute; inset: 0; z-index: 8;
-    width: 100%; height: 100%; border: 0; margin: 0;
-    background: #111; color: #fff;
+    position: absolute; inset: 0; z-index: 8; width: 100%; height: 100%;
+    border: 0; margin: 0; background: #111; color: #fff;
     font: 700 28px/1.5 -apple-system, "PingFang SC", sans-serif;
     -webkit-appearance: none; appearance: none;
   }
@@ -151,117 +167,154 @@
 </head>
 <body>
 <div id="page">
-  <div class="tb-header">
-    <div class="tb-sr">
-      <div class="sim-el tb-hi" data-lv="0" data-sp="图标，扫一扫" data-t="icon">📷</div>
-      <div class="sim-el tb-sb" data-lv="0" data-sp="搜索框，点击搜索商品店铺品牌">
-        <span class="si">🔍</span><span class="st">无线蓝牙耳机</span><span class="btn">搜索</span>
+  <div class="top">
+    <div class="search-row">
+      <div class="sim-el ico" data-lv="0" data-sp="扫一扫，按钮">▢</div>
+      <div class="sim-el search" data-lv="0" data-sp="搜索框，无线蓝牙耳机">
+        <span class="ph">无线蓝牙耳机</span>
+        <span class="cam">📷</span>
+        <span class="go">搜索</span>
       </div>
-      <div class="sim-el tb-hi" data-lv="0" data-sp="图标，消息中心，五条未读" data-t="icon">💬<span class="tb-badge">5</span></div>
+      <div class="sim-el ico" data-lv="0" data-sp="消息，五条未读，按钮">✉<span class="badge">5</span></div>
+    </div>
+    <div class="tabs">
+      <div class="sim-el tab" data-lv="0" data-sp="关注，频道">关注</div>
+      <div class="sim-el tab on" data-lv="0" data-sp="推荐，频道，已选中">推荐</div>
+      <div class="sim-el tab" data-lv="0" data-sp="直播，频道">直播</div>
+      <div class="sim-el tab" data-lv="0" data-sp="淘金币，频道">淘金币</div>
     </div>
   </div>
-  <div class="tb-qnav">
-    <div class="sim-el tb-qn" data-lv="1" data-sp="图标，天猫新品频道" data-t="icon"><div class="tb-qn-ic">🐱</div><div class="tb-qn-lb">天猫新品</div></div>
-    <div class="sim-el tb-qn" data-lv="1" data-sp="图标，淘宝直播频道" data-t="icon"><div class="tb-qn-ic">📺</div><div class="tb-qn-lb">直播</div></div>
-    <div class="sim-el tb-qn" data-lv="1" data-sp="图标，充值中心" data-t="icon"><div class="tb-qn-ic">💳</div><div class="tb-qn-lb">充值中心</div></div>
-    <div class="sim-el tb-qn" data-lv="1" data-sp="图标，领淘金币" data-t="icon"><div class="tb-qn-ic">🪙</div><div class="tb-qn-lb">领金币</div></div>
-    <div class="sim-el tb-qn" data-lv="1" data-sp="图标，我的订单" data-t="icon"><div class="tb-qn-ic">📦</div><div class="tb-qn-lb">我的订单</div></div>
+
+  <div class="icons">
+    <div class="sim-el icon" data-lv="1" data-sp="淘宝直播，按钮"><div class="bub" style="background:#ff2d54">▶</div><span>淘宝直播</span></div>
+    <div class="sim-el icon" data-lv="1" data-sp="百亿补贴，按钮"><div class="bub" style="background:#7c3aed">¥</div><span>百亿补贴</span></div>
+    <div class="sim-el icon" data-lv="1" data-sp="天猫，按钮"><div class="bub" style="background:#e4393c">猫</div><span>天猫</span></div>
+    <div class="sim-el icon" data-lv="1" data-sp="淘金币，按钮"><div class="bub" style="background:#ffb000">币</div><span>淘金币</span></div>
+    <div class="sim-el icon" data-lv="1" data-sp="充值中心，按钮"><div class="bub" style="background:#2b8aed">充</div><span>充值中心</span></div>
   </div>
-  <div class="tb-cats">
-    <div class="sim-el tb-cat" data-lv="2" data-sp="图标，女装分类" data-t="icon"><div class="tb-cat-ic" style="background:#fff0f0">👗</div><div class="tb-cat-lb">女装</div></div>
-    <div class="sim-el tb-cat" data-lv="2" data-sp="图标，男装分类" data-t="icon"><div class="tb-cat-ic" style="background:#f0f0ff">👔</div><div class="tb-cat-lb">男装</div></div>
-    <div class="sim-el tb-cat" data-lv="2" data-sp="图标，鞋靴分类" data-t="icon"><div class="tb-cat-ic" style="background:#f0fff0">👟</div><div class="tb-cat-lb">鞋靴</div></div>
-    <div class="sim-el tb-cat" data-lv="2" data-sp="图标，箱包分类" data-t="icon"><div class="tb-cat-ic" style="background:#fff8f0">👜</div><div class="tb-cat-lb">箱包</div></div>
-    <div class="sim-el tb-cat" data-lv="2" data-sp="图标，数码分类" data-t="icon"><div class="tb-cat-ic" style="background:#f0f8ff">📱</div><div class="tb-cat-lb">数码</div></div>
-    <div class="sim-el tb-cat" data-lv="2" data-sp="图标，美妆分类" data-t="icon"><div class="tb-cat-ic" style="background:#fff0f8">💄</div><div class="tb-cat-lb">美妆</div></div>
-    <div class="sim-el tb-cat" data-lv="2" data-sp="图标，食品分类" data-t="icon"><div class="tb-cat-ic" style="background:#fffff0">🍜</div><div class="tb-cat-lb">食品</div></div>
-    <div class="sim-el tb-cat" data-lv="2" data-sp="图标，家电分类" data-t="icon"><div class="tb-cat-ic" style="background:#f8fff0">🏠</div><div class="tb-cat-lb">家电</div></div>
-    <div class="sim-el tb-cat" data-lv="2" data-sp="图标，母婴分类" data-t="icon"><div class="tb-cat-ic" style="background:#fff0ff">🍼</div><div class="tb-cat-lb">母婴</div></div>
-    <div class="sim-el tb-cat" data-lv="2" data-sp="图标，查看全部分类" data-t="icon"><div class="tb-cat-ic" style="background:#f5f5f5">📋</div><div class="tb-cat-lb">全部</div></div>
+  <div class="cats">
+    <div class="sim-el cat" data-lv="2" data-sp="女装，按钮"><div class="bub" style="background:#ffe4ea">👗</div><span>女装</span></div>
+    <div class="sim-el cat" data-lv="2" data-sp="男装，按钮"><div class="bub" style="background:#e8e8ff">👔</div><span>男装</span></div>
+    <div class="sim-el cat" data-lv="2" data-sp="鞋靴，按钮"><div class="bub" style="background:#e6f7e6">👟</div><span>鞋靴</span></div>
+    <div class="sim-el cat" data-lv="2" data-sp="箱包，按钮"><div class="bub" style="background:#fff1e0">👜</div><span>箱包</span></div>
+    <div class="sim-el cat" data-lv="2" data-sp="数码，按钮"><div class="bub" style="background:#e6f2ff">📱</div><span>数码</span></div>
+    <div class="sim-el cat" data-lv="2" data-sp="美妆，按钮"><div class="bub" style="background:#ffe6f4">💄</div><span>美妆</span></div>
+    <div class="sim-el cat" data-lv="2" data-sp="食品，按钮"><div class="bub" style="background:#fff8d6">🍜</div><span>食品</span></div>
+    <div class="sim-el cat" data-lv="2" data-sp="家电，按钮"><div class="bub" style="background:#eef8e0">🏠</div><span>家电</span></div>
+    <div class="sim-el cat" data-lv="2" data-sp="母婴，按钮"><div class="bub" style="background:#f3e6ff">🍼</div><span>母婴</span></div>
+    <div class="sim-el cat" data-lv="2" data-sp="分类，按钮"><div class="bub" style="background:#f0f0f0">▦</div><span>分类</span></div>
   </div>
-  <div class="sim-el tb-banner" data-lv="1" data-sp="图片，年中大促广告横幅，满三百减五十" data-t="image" style="background:linear-gradient(135deg,#ff6b00,#ff2d54)">年中大促 满300减50</div>
-  <div class="tb-chs">
-    <div class="sim-el tb-ch" data-lv="1" data-sp="天猫品牌旗舰频道" style="background:linear-gradient(135deg,#e4393c,#ff6b6b)">天猫旗舰</div>
-    <div class="sim-el tb-ch" data-lv="1" data-sp="聚划算折扣频道" style="background:linear-gradient(135deg,#ff5000,#ff9500)">聚划算</div>
-    <div class="sim-el tb-ch" data-lv="1" data-sp="百亿补贴超值低价频道" style="background:linear-gradient(135deg,#7c3aed,#a78bfa)">百亿补贴</div>
-    <div class="sim-el tb-ch" data-lv="1" data-sp="淘宝直播频道" style="background:linear-gradient(135deg,#e91e8c,#ff6bb5)">淘宝直播</div>
+
+  <div class="twin">
+    <div class="sim-el card live" data-lv="1" data-sp="淘宝直播，正在直播"><h3>淘宝直播</h3><p>热卖直降 · 边看边买</p></div>
+    <div class="sim-el card sub" data-lv="1" data-sp="百亿补贴，官方低价"><h3>百亿补贴</h3><p>官方补贴 · 价格星</p></div>
   </div>
-  <div class="sim-el tb-sec" data-lv="1" data-sp="限时秒杀，区域标题"><span class="t">限时秒杀</span><span class="m">更多</span></div>
-  <div class="tb-flash">
-    <div class="sim-el tb-fi" data-lv="2" data-sp="秒杀商品，无线蓝牙耳机，五十九元">
-      <div class="sim-el tb-fi-img" data-lv="4" data-sp="图片，无线蓝牙耳机" data-t="image">🎧</div>
-      <div class="tb-fi-pr"><div class="tb-fi-now">¥59</div><div class="tb-fi-was">¥199</div></div>
-    </div>
-    <div class="sim-el tb-fi" data-lv="2" data-sp="秒杀商品，保温杯，二十九元">
-      <div class="sim-el tb-fi-img" data-lv="4" data-sp="图片，不锈钢保温杯" data-t="image">🫗</div>
-      <div class="tb-fi-pr"><div class="tb-fi-now">¥29</div><div class="tb-fi-was">¥89</div></div>
-    </div>
-    <div class="sim-el tb-fi" data-lv="2" data-sp="秒杀商品，充电宝，四十九元">
-      <div class="sim-el tb-fi-img" data-lv="4" data-sp="图片，充电宝" data-t="image">🔋</div>
-      <div class="tb-fi-pr"><div class="tb-fi-now">¥49</div><div class="tb-fi-was">¥129</div></div>
-    </div>
-    <div class="sim-el tb-fi" data-lv="2" data-sp="秒杀商品，手机支架，九点九元">
-      <div class="sim-el tb-fi-img" data-lv="4" data-sp="图片，手机支架" data-t="image">📱</div>
-      <div class="tb-fi-pr"><div class="tb-fi-now">¥9.9</div><div class="tb-fi-was">¥39</div></div>
-    </div>
+
+  <div class="sim-el news" data-lv="1" data-sp="淘宝头条，年中大促满三百减五十">
+    <b>头条</b><span>年中大促开启，部分商品满300减50</span>
   </div>
-  <div class="sim-el tb-sec" data-lv="1" data-sp="猜你喜欢，推荐区域标题"><span class="t">猜你喜欢</span><span class="m">换一批</span></div>
-  <div class="tb-prods">
-    <div class="sim-el tb-prod" data-lv="2" data-sp="商品，碎花连衣裙，八十九元">
-      <div class="sim-el tb-prod-img" data-lv="4" data-sp="图片，碎花连衣裙商品主图" data-t="image">👗<div class="tb-prod-tag" style="background:#e4393c">天猫</div></div>
-      <div class="tb-prod-bd">
-        <div class="sim-el tb-prod-tt" data-lv="3" data-sp="商品标题，夏季碎花连衣裙宽松显瘦"><span class="st">天猫</span>夏季碎花连衣裙 宽松显瘦</div>
-        <div class="sim-el tb-prod-rw" data-lv="4" data-sp="价格八十九元，已售一万二千件"><span class="tb-prod-pr"><span class="y">¥</span>89</span><span class="tb-prod-sl">1.2万+付款</span></div>
+
+  <div class="seckill">
+    <div class="sk-hd">
+      <div class="sim-el sk-logo" data-lv="1" data-sp="限时秒杀">淘宝秒杀</div>
+      <div class="clock">距结束 <i id="h">02</i>:<i id="m">18</i>:<i id="s">42</i></div>
+    </div>
+    <div class="sk-row">
+      <div class="sim-el sk-item" data-lv="2" data-sp="无线蓝牙耳机，五十九元">
+        <div class="sim-el photo" data-lv="4" data-sp="图片，无线蓝牙耳机" style="background:linear-gradient(160deg,#2c2c2c,#6b6b6b)">🎧</div>
+        <div class="sk-price"><div class="now">¥59</div><div class="was">¥199</div></div>
       </div>
-    </div>
-    <div class="sim-el tb-prod" data-lv="2" data-sp="商品，无线降噪耳机，一千三百九十九元">
-      <div class="sim-el tb-prod-img" data-lv="4" data-sp="图片，无线降噪耳机商品主图" data-t="image">🎧<div class="tb-prod-tag" style="background:#7c3aed">补贴</div></div>
-      <div class="tb-prod-bd">
-        <div class="sim-el tb-prod-tt" data-lv="3" data-sp="商品标题，主动降噪无线蓝牙耳机"><span class="st">官方</span>主动降噪无线蓝牙耳机</div>
-        <div class="sim-el tb-prod-rw" data-lv="4" data-sp="价格一千三百九十九元，已售八千件"><span class="tb-prod-pr"><span class="y">¥</span>1399</span><span class="tb-prod-sl">8000+付款</span></div>
+      <div class="sim-el sk-item" data-lv="2" data-sp="保温杯，二十九元">
+        <div class="sim-el photo" data-lv="4" data-sp="图片，保温杯" style="background:linear-gradient(160deg,#c8e6c9,#81c784)">🫗</div>
+        <div class="sk-price"><div class="now">¥29</div><div class="was">¥89</div></div>
       </div>
-    </div>
-    <div class="sim-el tb-prod" data-lv="2" data-sp="商品，男士纯棉短袖，三十九元">
-      <div class="sim-el tb-prod-img" data-lv="4" data-sp="图片，男士短袖商品主图" data-t="image">👕</div>
-      <div class="tb-prod-bd">
-        <div class="sim-el tb-prod-tt" data-lv="3" data-sp="商品标题，男士纯棉短袖圆领宽松">男士纯棉短袖 圆领宽松</div>
-        <div class="sim-el tb-prod-rw" data-lv="4" data-sp="价格三十九元，已售五万六千件"><span class="tb-prod-pr"><span class="y">¥</span>39</span><span class="tb-prod-sl">5.6万+付款</span></div>
-        <div class="sim-el tb-spec" data-lv="5" data-sp="已选规格，白色，尺码中号">白色 / M</div>
+      <div class="sim-el sk-item" data-lv="2" data-sp="充电宝，四十九元">
+        <div class="sim-el photo" data-lv="4" data-sp="图片，充电宝" style="background:linear-gradient(160deg,#bbdefb,#64b5f6)">🔋</div>
+        <div class="sk-price"><div class="now">¥49</div><div class="was">¥129</div></div>
+      </div>
+      <div class="sim-el sk-item" data-lv="2" data-sp="手机支架，九点九元">
+        <div class="sim-el photo" data-lv="4" data-sp="图片，手机支架" style="background:linear-gradient(160deg,#ffe0b2,#ffb74d)">📱</div>
+        <div class="sk-price"><div class="now">¥9.9</div><div class="was">¥39</div></div>
       </div>
     </div>
-    <div class="sim-el tb-prod" data-lv="2" data-sp="商品，保湿精华液，九百八十元">
-      <div class="sim-el tb-prod-img" data-lv="4" data-sp="图片，精华液商品主图" data-t="image">✨<div class="tb-prod-tag" style="background:#f5a623">大牌</div></div>
-      <div class="tb-prod-bd">
-        <div class="sim-el tb-prod-tt" data-lv="3" data-sp="商品标题，保湿补水精华液二百三十毫升"><span class="st">天猫</span>保湿补水精华液 230ml</div>
-        <div class="sim-el tb-prod-rw" data-lv="4" data-sp="价格九百八十元，已售三千二百件"><span class="tb-prod-pr"><span class="y">¥</span>980</span><span class="tb-prod-sl">3200+付款</span></div>
+  </div>
+
+  <div class="sim-el feed-h" data-lv="1" data-sp="猜你喜欢">猜你喜欢</div>
+  <div class="feed">
+    <div class="sim-el goods" data-lv="2" data-sp="碎花连衣裙，八十九元">
+      <div class="sim-el cover" data-lv="4" data-sp="图片，碎花连衣裙" style="background:linear-gradient(165deg,#f8bbd0,#ec407a)">👗<span class="tag">天猫</span></div>
+      <div class="bd">
+        <div class="sim-el tt" data-lv="3" data-sp="夏季碎花连衣裙，宽松显瘦">夏季碎花连衣裙 宽松显瘦中长款</div>
+        <div class="sim-el meta" data-lv="4" data-sp="八十九元，月销一万二千"><span class="price"><em>¥</em>89</span><span class="sold">1.2万人付款</span></div>
+      </div>
+    </div>
+    <div class="sim-el goods" data-lv="2" data-sp="降噪耳机，一千三百九十九元">
+      <div class="sim-el cover" data-lv="4" data-sp="图片，降噪耳机" style="background:linear-gradient(165deg,#eceff1,#90a4ae)">🎧<span class="tag s">补贴</span></div>
+      <div class="bd">
+        <div class="sim-el tt" data-lv="3" data-sp="主动降噪无线蓝牙耳机">主动降噪无线蓝牙耳机 第二代</div>
+        <div class="sim-el meta" data-lv="4" data-sp="一千三百九十九元，月销八千"><span class="price"><em>¥</em>1399</span><span class="sold">8000人付款</span></div>
+      </div>
+    </div>
+    <div class="sim-el goods" data-lv="2" data-sp="男士短袖，三十九元">
+      <div class="sim-el cover" data-lv="4" data-sp="图片，男士短袖" style="background:linear-gradient(165deg,#e3f2fd,#42a5f5)">👕</div>
+      <div class="bd">
+        <div class="sim-el tt" data-lv="3" data-sp="男士纯棉短袖，圆领宽松">男士纯棉短袖 圆领宽松 夏季</div>
+        <div class="sim-el meta" data-lv="4" data-sp="三十九元，月销五万六千"><span class="price"><em>¥</em>39</span><span class="sold">5.6万人付款</span></div>
+        <div class="sim-el shop" data-lv="5" data-sp="已选，白色，中号">白色 / M</div>
+      </div>
+    </div>
+    <div class="sim-el goods" data-lv="2" data-sp="精华液，九百八十元">
+      <div class="sim-el cover" data-lv="4" data-sp="图片，精华液" style="background:linear-gradient(165deg,#fff3e0,#ffcc80)">✨<span class="tag">大牌</span></div>
+      <div class="bd">
+        <div class="sim-el tt" data-lv="3" data-sp="保湿补水精华液，二百三十毫升">保湿补水精华液 230ml</div>
+        <div class="sim-el meta" data-lv="4" data-sp="九百八十元，月销三千二百"><span class="price"><em>¥</em>980</span><span class="sold">3200人付款</span></div>
+      </div>
+    </div>
+    <div class="sim-el goods" data-lv="2" data-sp="运动鞋，一百五十九元">
+      <div class="sim-el cover" data-lv="4" data-sp="图片，运动鞋" style="background:linear-gradient(165deg,#e8f5e9,#66bb6a)">👟</div>
+      <div class="bd">
+        <div class="sim-el tt" data-lv="3" data-sp="透气跑步运动鞋">透气跑步运动鞋 轻便缓震</div>
+        <div class="sim-el meta" data-lv="4" data-sp="一百五十九元，月销九千"><span class="price"><em>¥</em>159</span><span class="sold">9000人付款</span></div>
+      </div>
+    </div>
+    <div class="sim-el goods" data-lv="2" data-sp="双肩包，七十九元">
+      <div class="sim-el cover" data-lv="4" data-sp="图片，双肩包" style="background:linear-gradient(165deg,#efebe9,#8d6e63)">🎒</div>
+      <div class="bd">
+        <div class="sim-el tt" data-lv="3" data-sp="休闲双肩包，大容量"><span style="background:#ff5000;color:#fff;font-size:10px;padding:1px 4px;border-radius:2px;margin-right:4px;">包邮</span>休闲双肩包 大容量</div>
+        <div class="sim-el meta" data-lv="4" data-sp="七十九元，月销四千"><span class="price"><em>¥</em>79</span><span class="sold">4000人付款</span></div>
       </div>
     </div>
   </div>
 </div>
+
 <div id="tabbar">
-  <div class="sim-el tb-tab active" data-lv="0" data-sp="图标，首页，当前选中" data-t="icon"><span class="tb-tab-ic">🏠</span><span class="tb-tab-lb">首页</span></div>
-  <div class="sim-el tb-tab" data-lv="0" data-sp="图标，逛逛" data-t="icon"><span class="tb-tab-ic">🧭</span><span class="tb-tab-lb">逛逛</span></div>
-  <div class="sim-el tb-tab" data-lv="0" data-sp="图标，消息" data-t="icon"><span class="tb-tab-ic">✉️</span><span class="tb-tab-lb">消息</span></div>
-  <div class="sim-el tb-tab" data-lv="0" data-sp="图标，购物车" data-t="icon"><span class="tb-tab-ic">🛒</span><span class="tb-tab-lb">购物车</span></div>
-  <div class="sim-el tb-tab" data-lv="0" data-sp="图标，我的淘宝" data-t="icon"><span class="tb-tab-ic">👤</span><span class="tb-tab-lb">我的</span></div>
+  <div class="sim-el nav on" data-lv="0" data-sp="首页，按钮，已选中"><span class="n">⌂</span>首页</div>
+  <div class="sim-el nav" data-lv="0" data-sp="逛逛，按钮"><span class="n">◎</span>逛逛</div>
+  <div class="sim-el nav" data-lv="0" data-sp="消息，按钮"><span class="n">✉</span>消息</div>
+  <div class="sim-el nav" data-lv="0" data-sp="购物车，按钮"><span class="n">▣</span>购物车</div>
+  <div class="sim-el nav" data-lv="0" data-sp="我的淘宝，按钮"><span class="n">☺</span>我的</div>
 </div>
 <div id="hit"></div>
 <button type="button" id="gate">点击屏幕开始<small>单指滑动朗读 · 双指翻页</small></button>
 <script>
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
 const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.15;
-const SPEECH_RATE = 4;
-const SPEECH_VOL = 0.8;
+const SPEECH_RATE = 4, SPEECH_VOL = 0.8;
 const page = document.getElementById("page");
 const hit = document.getElementById("hit");
 const gate = document.getElementById("gate");
+document.querySelectorAll(".sim-el").forEach(function (el, i) { el.dataset.id = "n" + i; });
 
-document.querySelectorAll(".sim-el").forEach(function (el, i) {
-  el.dataset.id = "n" + i;
-});
+let left = 2 * 3600 + 18 * 60 + 42;
+setInterval(function () {
+  if (left > 0) left -= 1;
+  const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
+  const pad = function (n) { return (n < 10 ? "0" : "") + n; };
+  const eh = document.getElementById("h"), em = document.getElementById("m"), es = document.getElementById("s");
+  if (eh) { eh.textContent = pad(h); em.textContent = pad(m); es.textContent = pad(s); }
+}, 1000);
 
 let ctx = null, lastId = null, lastTap = 0, armed = false, panY = null, mandarinVoice = null;
-
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -276,8 +329,7 @@ function isMainlandMandarin(v) {
   if (/hk|tw|yue/.test(uri)) return false;
   if (lang === "zh-cn" || lang === "zh-hans-cn" || lang.indexOf("zh-cn-") === 0) return true;
   if (uri.indexOf("zh-cn") !== -1) return true;
-  if (/中国大陆|中国大陸/.test(name)) return true;
-  if (name === "普通话") return true;
+  if (/中国大陆|中国大陸/.test(name) || name === "普通话") return true;
   return false;
 }
 function pickMandarinVoice() {
@@ -286,9 +338,7 @@ function pickMandarinVoice() {
 function speak(txt) {
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(txt);
-  u.lang = "zh-CN";
-  u.rate = SPEECH_RATE;
-  u.volume = SPEECH_VOL;
+  u.lang = "zh-CN"; u.rate = SPEECH_RATE; u.volume = SPEECH_VOL;
   mandarinVoice = pickMandarinVoice();
   if (mandarinVoice) u.voice = mandarinVoice;
   speechSynthesis.speak(u);
@@ -296,47 +346,29 @@ function speak(txt) {
 speechSynthesis.addEventListener("voiceschanged", function () { mandarinVoice = pickMandarinVoice(); });
 setTimeout(function () { mandarinVoice = pickMandarinVoice(); }, 300);
 setInterval(function () {
-  if (speechSynthesis.speaking && !speechSynthesis.paused) {
-    speechSynthesis.pause();
-    speechSynthesis.resume();
-  }
+  if (speechSynthesis.speaking && !speechSynthesis.paused) { speechSynthesis.pause(); speechSynthesis.resume(); }
 }, 10000);
-
 function levelIndex(lv) {
-  const raw = String(lv || "0");
-  if (/^L/i.test(raw)) {
-    const n = parseInt(raw.replace(/^L/i, ""), 10);
-    return Math.min(5, Math.max(0, (isNaN(n) ? 1 : n) - 1));
-  }
-  const n = parseInt(raw, 10);
+  const n = parseInt(lv, 10);
   return isNaN(n) ? 0 : Math.min(5, Math.max(0, n));
 }
 function ensureAudio() {
-  if (navigator.audioSession) {
-    try { navigator.audioSession.type = "playback"; } catch (err) {}
-  }
+  if (navigator.audioSession) { try { navigator.audioSession.type = "playback"; } catch (err) {} }
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state === "suspended") ctx.resume();
   return ctx;
 }
 function playTone(lv) {
-  const c = ensureAudio();
-  if (!c) return;
-  const f = F[lv] || 523.25;
-  const t0 = c.currentTime;
+  const c = ensureAudio(); if (!c) return;
+  const f = F[lv] || 523.25, t0 = c.currentTime;
   [[f, 0.34], [f * 2, 0.04], [f * 3, 0.014]].forEach(function (part) {
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = "sine";
-    o.frequency.setValueAtTime(part[0], t0);
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = "sine"; o.frequency.setValueAtTime(part[0], t0);
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(part[1], t0 + ATT);
     g.gain.setValueAtTime(part[1], t0 + DUR - REL);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + DUR);
-    o.connect(g);
-    g.connect(c.destination);
-    o.start(t0);
-    o.stop(t0 + DUR + 0.02);
+    o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + DUR + 0.02);
   });
 }
 function elementFromTouch(t) {
@@ -348,81 +380,55 @@ function elementFromTouch(t) {
 function explore(t) {
   const cell = elementFromTouch(t);
   document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
-  if (!cell) {
-    lastId = null;
-    speechSynthesis.cancel();
-    return;
-  }
+  if (!cell) { lastId = null; speechSynthesis.cancel(); return; }
   cell.classList.add("on");
   if (cell.dataset.id === lastId) return;
   lastId = cell.dataset.id;
   speechSynthesis.cancel();
   playTone(levelIndex(cell.dataset.lv));
-  setTimeout(function () {
-    if (lastId === cell.dataset.id) speak(cell.dataset.sp);
-  }, (DUR + DLY) * 1000);
+  setTimeout(function () { if (lastId === cell.dataset.id) speak(cell.dataset.sp); }, (DUR + DLY) * 1000);
 }
 function midpointY(touches) {
-  let y = 0;
-  for (let i = 0; i < touches.length; i++) y += touches[i].clientY;
-  return y / touches.length;
+  let y = 0; for (let i = 0; i < touches.length; i++) y += touches[i].clientY; return y / touches.length;
 }
 function onTouchStart(e) {
   e.preventDefault();
-  if (e.touches.length >= 2) {
-    panY = midpointY(e.touches);
-    speechSynthesis.cancel();
-    return;
-  }
+  if (e.touches.length >= 2) { panY = midpointY(e.touches); speechSynthesis.cancel(); return; }
   const now = Date.now();
   if (now - lastTap < 380 && lastId) {
     const cur = document.querySelector(".sim-el.on");
     speechSynthesis.cancel();
     playTone(cur ? levelIndex(cur.dataset.lv) : 0);
     setTimeout(function () { speak("选中，" + (cur ? cur.dataset.sp : "")); }, (DUR + DLY) * 1000);
-    lastTap = 0;
-    return;
+    lastTap = 0; return;
   }
-  lastTap = now;
-  explore(e.changedTouches[0]);
+  lastTap = now; explore(e.changedTouches[0]);
 }
 function onTouchMove(e) {
   e.preventDefault();
   if (e.touches.length >= 2) {
     const y = midpointY(e.touches);
     if (panY != null) page.scrollTop += panY - y;
-    panY = y;
-    return;
+    panY = y; return;
   }
-  panY = null;
-  explore(e.changedTouches[0]);
+  panY = null; explore(e.changedTouches[0]);
 }
-function onTouchEnd(e) {
-  e.preventDefault();
-  if (e.touches.length < 2) panY = null;
-}
-function onMouseMove(e) {
-  if (!armed) return;
-  explore(e);
-}
+function onTouchEnd(e) { e.preventDefault(); if (e.touches.length < 2) panY = null; }
 function unlock() {
   if (armed) return;
   if (/MicroMessenger|DingTalk/i.test(navigator.userAgent)) {
-    gate.innerHTML = "请用 Safari 打开<small>微信里不能朗读</small>";
-    return;
+    gate.innerHTML = "请用 Safari 打开<small>微信里不能朗读</small>"; return;
   }
   armed = true;
   mandarinVoice = pickMandarinVoice();
-  ensureAudio();
-  playTone(0);
+  ensureAudio(); playTone(0);
   setTimeout(function () { speak("开始"); }, (DUR + DLY) * 1000);
-  gate.remove();
-  hit.style.display = "block";
+  gate.remove(); hit.style.display = "block";
   hit.addEventListener("touchstart", onTouchStart, { passive: false });
   hit.addEventListener("touchmove", onTouchMove, { passive: false });
   hit.addEventListener("touchend", onTouchEnd, { passive: false });
   hit.addEventListener("touchcancel", onTouchEnd, { passive: false });
-  hit.addEventListener("mousemove", onMouseMove);
+  hit.addEventListener("mousemove", function (e) { if (armed) explore(e); });
 }
 gate.addEventListener("click", unlock);
 </script>
