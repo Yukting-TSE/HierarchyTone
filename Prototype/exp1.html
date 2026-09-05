@@ -452,7 +452,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.21</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.22</span>
   <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
@@ -817,16 +817,16 @@ function trialsToCsv(trials) {
 }
 
 // ============================================================
-//  更宽间距：列相隔大三度偏宽、行相隔八度，格子更好分
+//  从 C3 起算：加大相邻格音程差（列纯五度、行大六度），不用整八度抬行
 // ============================================================
 const BASE_FREQ_C3 = 130.81;
-const COL_SEMITONES = [0, 8, 16, 24];
-const ROW_SEMITONES = [0, 12, 24, 36];
+const COL_SEMITONES = [0, 7, 14, 21];   // C3–G3–D4–A4（原列约四度，现拉大到五度）
+const ROW_SEMITONES = [0, 9, 18, 27];   // 行间大六度（原为五度 +7；不用 +12 整八度）
 const NOTE_SEMITONES = {
   'C':0,'C#':1,'D':2,'D#':3,'E':4,'F':5,
   'F#':6,'G':7,'G#':8,'A':9,'A#':10,'B':11
 };
-const MELODY_COL = ['C', 'G#', 'E', 'C'];
+const MELODY_COL = ['C', 'G', 'D', 'A'];
 
 function calcFreq(semitonesFromC3) {
   return BASE_FREQ_C3 * Math.pow(2, semitonesFromC3 / 12);
@@ -916,9 +916,10 @@ function stopVoices(fadeSec) {
 }
 
 function playTone(freq, dur, type, vol) {
+  // 格子音高：Web Audio 振荡器（非缓冲/采样）
   if (dur == null) dur = 0.5;
-  if (type == null) type = 'sine';
-  if (vol == null) vol = 0.3;
+  if (type == null) type = 'triangle';
+  if (vol == null) vol = 0.42;
   if (!isFinite(freq) || freq <= 0) return;
   ensureAudio();
   if (!audioCtx) return;
@@ -929,7 +930,8 @@ function playTone(freq, dur, type, vol) {
     const t0 = audioCtx.currentTime;
     o.type = type;
     o.frequency.setValueAtTime(freq, t0);
-    g.gain.setValueAtTime(Math.max(0.0001, vol), t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(Math.max(0.0001, vol), t0 + 0.012);
     g.gain.linearRampToValueAtTime(0.0001, t0 + Math.max(0.05, dur));
     o.connect(g);
     g.connect(audioCtx.destination);
@@ -971,7 +973,7 @@ function playTransitionCue(nr, nc) {
 
 function playNodeSound(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq, 0.5, 'sine', 0.38);
+  playTone(freq, 0.5, 'triangle', 0.42);
   updateSoundInfo(r, c, freq);
 }
 
@@ -1022,7 +1024,7 @@ async function playPathPreview(path) {
       const cell = document.getElementById(`cell-${node.r}-${node.c}`);
       if (cell) cell.classList.add('preview-highlight');
 
-      playTone(freq, NOTE_DUR / 1000, 'sine', 0.42);
+      playTone(freq, NOTE_DUR / 1000, 'triangle', 0.45);
       updateSoundInfo(node.r, node.c, freq);
 
       addLog('preview', `  ♪ R${round}·节点(${node.r},${node.c}) → ${name} [${Math.round(freq)}Hz] (${i+1}/${path.length})`);
@@ -1733,9 +1735,10 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.21');
-addLog('info','• 音高间距已加大：列约大六度、行整八度');
-addLog('info','• 条件三误差改为振荡器刺音（更明显）');
+addLog('system','系统初始化完成 v1.22');
+addLog('info','• 格子音高：振荡器（triangle），自 C3 起算');
+addLog('info','• 音程拉大：列纯五度、行大六度（非整八度抬高）');
+addLog('info','• 条件三误差：振荡器刺音');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
