@@ -452,7 +452,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.14</span>
+  <span>非视觉条件下听觉表征界面控制机制研究 · 实验系统原型 v1.15</span>
   <span id="audioStatus">🔊 Web Audio</span>
 </div>
 
@@ -600,6 +600,8 @@
 
 <audio id="tonePlayerA" playsinline webkit-playsinline></audio>
 <audio id="tonePlayerB" playsinline webkit-playsinline></audio>
+<audio id="tonePlayerC" playsinline webkit-playsinline></audio>
+<audio id="tonePlayerD" playsinline webkit-playsinline></audio>
 <script>
 // ============================================================
 //  全局
@@ -866,12 +868,10 @@ function getRandomPath() {
 }
 
 // ============================================================
-//  发声：WAV 双轨交叉淡出，避免移动时掐音刺啦
+//  发声：每个音播完自己淡出，移动时不掐上一个，避免刺啦
 // ============================================================
-const liveOsc = [];
 let toneUrls = [];
 let toneFlip = 0;
-let fadeTimer = 0;
 
 function setAudioStatus(text) {
   const el = document.getElementById('audioStatus');
@@ -881,51 +881,30 @@ function setAudioStatus(text) {
 function tonePlayers() {
   return [
     document.getElementById('tonePlayerA'),
-    document.getElementById('tonePlayerB')
-  ];
+    document.getElementById('tonePlayerB'),
+    document.getElementById('tonePlayerC'),
+    document.getElementById('tonePlayerD')
+  ].filter(Boolean);
 }
 
-function fadeOutPlayer(player) {
-  if (!player) return;
-  const startVol = player.volume;
-  if (player.paused || startVol <= 0) {
-    try { player.pause(); player.volume = 1; } catch (err) {}
-    return;
-  }
-  const t0 = performance.now();
-  const ms = 45;
-  function step() {
-    const k = Math.min(1, (performance.now() - t0) / ms);
-    try { player.volume = startVol * (1 - k); } catch (err) {}
-    if (k < 1) requestAnimationFrame(step);
-    else {
-      try { player.pause(); player.currentTime = 0; player.volume = 1; } catch (err) {}
+function nextFreePlayer() {
+  const els = tonePlayers();
+  for (let i = 0; i < els.length; i++) {
+    const el = els[(toneFlip + i) % els.length];
+    if (el.paused || el.ended || el.currentTime === 0) {
+      toneFlip = (toneFlip + i + 1) % els.length;
+      return el;
     }
   }
-  requestAnimationFrame(step);
-}
-
-function stopAllSounds() {
-  if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = 0; }
-  tonePlayers().forEach(fadeOutPlayer);
-  const c = audioCtx;
-  const t = c ? c.currentTime : 0;
-  liveOsc.forEach(function (o) {
-    try {
-      if (o._gain) {
-        o._gain.gain.cancelScheduledValues(t);
-        o._gain.gain.setValueAtTime(Math.max(o._gain.gain.value, 0.0001), t);
-        o._gain.gain.linearRampToValueAtTime(0.0001, t + 0.04);
-      }
-      o.stop(t + 0.05);
-    } catch (err) {}
-  });
-  liveOsc.length = 0;
+  const extra = new Audio();
+  extra.setAttribute('playsinline', '');
+  extra.setAttribute('webkit-playsinline', '');
+  return extra;
 }
 
 function makeWavBlob(freq, durSec, peak) {
   const sr = 44100;
-  const n = Math.max(2205, Math.floor(sr * durSec));
+  const n = Math.max(4410, Math.floor(sr * durSec));
   const dataSize = n * 2;
   const buf = new ArrayBuffer(44 + dataSize);
   const v = new DataView(buf);
@@ -945,16 +924,56 @@ function makeWavBlob(freq, durSec, peak) {
   v.setUint16(34, 16, true);
   wstr(36, 'data');
   v.setUint32(40, dataSize, true);
-  const fadeIn = Math.min(882, Math.floor(n / 8));
-  const fadeOut = Math.min(2205, Math.floor(n / 3));
+  const fadeIn = Math.min(1323, Math.floor(n / 6));
+  const fadeOut = Math.min(4410, Math.floor(n / 2.5));
   for (let i = 0; i < n; i++) {
     let env = 1;
-    if (i < fadeIn) env = i / fadeIn;
-    else if (i > n - fadeOut) env = Math.max(0, (n - i) / fadeOut);
+    if (i < fadeIn) env = 0.5 - 0.5 * Math.cos(Math.PI * i / fadeIn);
+    else if (i > n - fadeOut) env = 0.5 - 0.5 * Math.cos(Math.PI * (n - i) / fadeOut);
     const s = env * peak * Math.sin(2 * Math.PI * freq * i / sr);
     v.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, s)) * 32767), true);
   }
   return new Blob([buf], { type: 'audio/wav' });
+}
+
+function makeNoiseBlob(durSec, peak) {
+  const sr = 44100;
+  const n = Math.max(1, Math.floor(sr * durSec));
+  const dataSize = n * 2;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  function wstr(off, s) {
+    for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
+  }
+  wstr(0, 'RIFF');
+  v.setUint32(4, 36 + dataSize, true);
+  wstr(8, 'WAVE');
+  wstr(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true);
+  v.setUint32(28, sr * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  wstr(36, 'data');
+  v.setUint32(40, dataSize, true);
+  const fade = Math.min(1323, Math.floor(n / 5));
+  for (let i = 0; i < n; i++) {
+    let env = 1;
+    if (i < fade) env = 0.5 - 0.5 * Math.cos(Math.PI * i / fade);
+    else if (i > n - fade) env = 0.5 - 0.5 * Math.cos(Math.PI * (n - i) / fade);
+    v.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, env * peak * (Math.random() * 2 - 1))) * 32767), true);
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+function rememberUrl(url) {
+  toneUrls.push(url);
+  while (toneUrls.length > 8) {
+    const old = toneUrls.shift();
+    try { URL.revokeObjectURL(old); } catch (err) {}
+  }
 }
 
 function unlockAudioSync() {
@@ -975,49 +994,35 @@ function ensureAudio() {
 }
 
 function playTone(freq, dur, type, vol) {
-  if (dur == null) dur = 0.4;
-  if (vol == null) vol = 0.5;
+  if (dur == null) dur = 0.32;
+  if (vol == null) vol = 0.48;
   if (!isFinite(freq) || freq <= 0) return;
   unlockAudioSync();
-  const pair = tonePlayers();
-  const prev = pair[toneFlip];
-  toneFlip = 1 - toneFlip;
-  const next = pair[toneFlip];
-  fadeOutPlayer(prev);
   try {
-    const blob = makeWavBlob(freq, dur, Math.min(0.78, vol));
+    const blob = makeWavBlob(freq, dur, Math.min(0.62, vol));
     const url = URL.createObjectURL(blob);
-    toneUrls.push(url);
-    while (toneUrls.length > 4) {
-      const old = toneUrls.shift();
-      try { URL.revokeObjectURL(old); } catch (err) {}
-    }
-    if (next) {
-      next.volume = 1;
-      next.src = url;
-      const p = next.play();
-      if (p && p.catch) p.catch(function () { setAudioStatus('⚠ 播放被拦截，请再点开始'); });
-    }
+    rememberUrl(url);
+    const player = nextFreePlayer();
+    player.volume = 1;
+    player.src = url;
+    const p = player.play();
+    if (p && p.catch) p.catch(function () { setAudioStatus('⚠ 播放被拦截，请再点开始'); });
   } catch (err) {}
 }
 
 function playNoise(dur) {
-  if (dur == null) dur = 0.35;
-  stopAllSounds();
-  ensureAudio();
-  if (!audioCtx) return;
-  const sz = audioCtx.sampleRate * dur;
-  const buf = audioCtx.createBuffer(1, sz, audioCtx.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < sz; i++) d[i] = (Math.random() * 2 - 1) * 0.95;
-  const s = audioCtx.createBufferSource(), g = audioCtx.createGain();
-  s.buffer = buf;
-  g.gain.setValueAtTime(0.85, audioCtx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-  s.connect(g);
-  g.connect(audioCtx.destination);
-  s.start();
-  s.stop(audioCtx.currentTime + dur);
+  dur = Number(dur) || 0.28;
+  unlockAudioSync();
+  try {
+    const blob = makeNoiseBlob(dur, 0.45);
+    const url = URL.createObjectURL(blob);
+    rememberUrl(url);
+    const player = nextFreePlayer();
+    player.volume = 1;
+    player.src = url;
+    const p = player.play();
+    if (p && p.catch) p.catch(function () {});
+  } catch (err) {}
 }
 
 function playTransitionCue(nr, nc) {
@@ -1026,14 +1031,14 @@ function playTransitionCue(nr, nc) {
 
 function playNodeSound(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq, 0.4, 'sine', 0.5);
+  playTone(freq, 0.32, 'sine', 0.48);
   updateSoundInfo(r, c, freq);
 }
 
 function playCorrectionConfirm(r, c) {
   const freq = getNodeFreq(r, c);
-  playTone(freq * 0.75, 0.15, 'sine', 0.28);
-  setTimeout(function () { playTone(freq, 0.32, 'sine', 0.45); }, 220);
+  playTone(freq * 0.75, 0.18, 'sine', 0.32);
+  setTimeout(function () { playTone(freq, 0.32, 'sine', 0.45); }, 280);
 }
 
 function updateSoundInfo(r, c, freq) {
@@ -1434,7 +1439,7 @@ function maybeFinishSession() {
 //  移动处理
 // ============================================================
 function handleMove(dr, dc) {
-  if (state.phase !== 'running') return;
+  if (state.phase !== 'running' || !state.currentPos) return;
   ensureAudio();
 
   const nr = state.currentPos.r + dr;
@@ -1442,87 +1447,90 @@ function handleMove(dr, dc) {
   const ts = ((performance.now() - state.startTime)/1000).toFixed(2);
   state.totalMoves++;
 
-  if (nr<0||nr>=GRID||nc<0||nc>=GRID) {
-    state.errorCount++;
-    state.lastWasError = true;
-    state.eventLog.push({type:'error',time:ts,from:{...state.currentPos},attempted:{r:nr,c:nc},reason:'boundary'});
-    if (state.condition === 3) {
-      playNoise(0.35);
-      setTimeout(()=>playNodeSound(state.currentPos.r,state.currentPos.c),400);
-      addLog('error',`[${ts}s] 边界错误 → 强噪声信号`);
-    } else {
-      playNodeSound(state.currentPos.r, state.currentPos.c);
-      addLog('error',`[${ts}s] 边界错误（无误差信号）`);
-    }
-    flashCell(state.currentPos.r,state.currentPos.c,'error-flash');
-    updateMetrics();
-    return;
-  }
-
-  const prevPos = {...state.currentPos};
-  const nextTarget = state.path[state.pathIdx + 1];
-  const isNextOnPath = nextTarget && nextTarget.r===nr && nextTarget.c===nc;
-  const targetPathIndex = findNodeInPath(nr, nc);
-  const isBackOnPath = targetPathIndex >= 0 && targetPathIndex <= state.pathIdx;
-
-  if (isNextOnPath) {
-    if (state.lastWasError || !state.onPath) {
-      state.corrections++;
-      state.eventLog.push({type:'correction',time:ts,pos:{r:nr,c:nc}});
+  try {
+    if (nr<0||nr>=GRID||nc<0||nc>=GRID) {
+      state.errorCount++;
+      state.lastWasError = true;
+      state.eventLog.push({type:'error',time:ts,from:{...state.currentPos},attempted:{r:nr,c:nc},reason:'boundary'});
       if (state.condition === 3) {
-        playCorrectionConfirm(nr, nc);
-        addLog('correct',`[${ts}s] 纠正成功 → (${nr},${nc}) — 确认音`);
+        playNoise(0.35);
+        setTimeout(function () { playNodeSound(state.currentPos.r,state.currentPos.c); },400);
+        addLog('error',`[${ts}s] 边界错误 → 强噪声信号`);
       } else {
-        addLog('correct',`[${ts}s] 纠正成功 → (${nr},${nc})`);
+        playNodeSound(state.currentPos.r, state.currentPos.c);
+        addLog('error',`[${ts}s] 边界错误（无误差信号）`);
       }
+      flashCell(state.currentPos.r,state.currentPos.c,'error-flash');
+      return;
     }
-    state.lastWasError = false;
-    state.onPath = true;
-    state.currentPos = {r:nr,c:nc};
-    state.pathIdx++;
-    state.visitedCells.add(`${nr},${nc}`);
-    state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:true});
 
-    if (state.condition === 3) playTransitionCue(nr, nc);
-    else playNodeSound(nr, nc);
+    const prevPos = {...state.currentPos};
+    const nextTarget = state.path[state.pathIdx + 1];
+    const isNextOnPath = nextTarget && nextTarget.r===nr && nextTarget.c===nc;
+    const targetPathIndex = findNodeInPath(nr, nc);
+    const isBackOnPath = targetPathIndex >= 0 && targetPathIndex <= state.pathIdx;
 
-    flashCell(nr,nc,'correct-flash');
-    addLog('move',`[${ts}s] 前进 → (${nr},${nc}) ✓ [步${state.pathIdx}/${state.path.length-1}]`);
+    if (isNextOnPath) {
+      const correcting = state.lastWasError || !state.onPath;
+      if (correcting) {
+        state.corrections++;
+        state.eventLog.push({type:'correction',time:ts,pos:{r:nr,c:nc}});
+        addLog('correct',`[${ts}s] 纠正成功 → (${nr},${nc})` + (state.condition === 3 ? ' — 确认音' : ''));
+      }
+      state.lastWasError = false;
+      state.onPath = true;
+      state.currentPos = {r:nr,c:nc};
+      state.pathIdx++;
+      state.visitedCells.add(`${nr},${nc}`);
+      state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:true});
 
-    if (state.pathIdx === state.path.length-1) setTimeout(()=>endTask(),600);
+      if (state.condition === 3 && correcting) playCorrectionConfirm(nr, nc);
+      else playNodeSound(nr, nc);
 
-  } else if (isBackOnPath) {
-    state.currentPos = {r:nr,c:nc};
-    state.visitedCells.add(`${nr},${nc}`);
-    state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:false,backtrack:true});
+      flashCell(nr,nc,'correct-flash');
+      addLog('move',`[${ts}s] 前进 → (${nr},${nc}) ✓ [步${state.pathIdx}/${state.path.length-1}]`);
 
-    if (state.condition === 3) playTransitionCue(nr, nc);
-    else playNodeSound(nr, nc);
+      if (state.pathIdx === state.path.length-1) setTimeout(function () { endTask(); },600);
 
-    addLog('info',`[${ts}s] 回退 → (${nr},${nc}) 路径节点 — 无误差`);
+    } else if (isBackOnPath) {
+      state.currentPos = {r:nr,c:nc};
+      state.visitedCells.add(`${nr},${nc}`);
+      state.eventLog.push({type:'move',time:ts,from:prevPos,to:{r:nr,c:nc},correct:false,backtrack:true});
+      if (state.pathIdx > targetPathIndex) state.pathIdx = targetPathIndex;
 
-  } else {
-    state.errorCount++;
-    state.lastWasError = true;
-    state.onPath = false;
-    state.currentPos = {r:nr,c:nc};
-    state.visitedCells.add(`${nr},${nc}`);
-    state.eventLog.push({type:'error',time:ts,from:prevPos,to:{r:nr,c:nc},reason:'off-path'});
+      if (state.condition === 3) playTransitionCue(nr, nc);
+      else playNodeSound(nr, nc);
 
-    if (state.condition === 3) {
-      playNoise(0.35);
-      setTimeout(()=>playNodeSound(nr,nc),400);
-      addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc}) — 强噪声信号`);
+      addLog('info',`[${ts}s] 回退 → (${nr},${nc}) 路径节点 — 无误差`);
+
     } else {
-      playNodeSound(nr,nc);
-      addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc})（无误差信号）`);
-    }
-    flashCell(nr,nc,'error-flash');
-  }
+      state.errorCount++;
+      state.lastWasError = true;
+      state.onPath = false;
+      state.currentPos = {r:nr,c:nc};
+      state.visitedCells.add(`${nr},${nc}`);
+      state.eventLog.push({type:'error',time:ts,from:prevPos,to:{r:nr,c:nc},reason:'off-path'});
 
-  document.getElementById('posDisplay').textContent = `(${state.currentPos.r},${state.currentPos.c})`;
-  document.getElementById('stepDisplay').textContent = `${state.pathIdx} / ${state.path.length-1}`;
-  updateMetrics(); refreshGrid();
+      if (state.condition === 3) {
+        playNoise(0.35);
+        setTimeout(function () { playNodeSound(nr,nc); },400);
+        addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc}) — 强噪声信号`);
+      } else {
+        playNodeSound(nr,nc);
+        addLog('error',`[${ts}s] 偏离路径 → (${nr},${nc})（无误差信号）`);
+      }
+      flashCell(nr,nc,'error-flash');
+    }
+  } catch (err) {
+    addLog('error', '移动已记下，声音播放出错，可以继续走');
+  } finally {
+    if (state.currentPos) {
+      document.getElementById('posDisplay').textContent = `(${state.currentPos.r},${state.currentPos.c})`;
+      document.getElementById('stepDisplay').textContent = `${state.pathIdx} / ${Math.max(0, state.path.length-1)}`;
+    }
+    updateMetrics();
+    refreshGrid();
+  }
 }
 
 function updateMetrics() {
@@ -1757,7 +1765,7 @@ document.getElementById('subjectId').addEventListener('change', function () {
     this.value = state.participantId;
   }
 });
-addLog('system','系统初始化完成 v1.14');
+addLog('system','系统初始化完成 v1.15');
 addLog('info','• 每场绑定一个编号；换人必须点「下一被试」');
 addLog('info','• 每题只记入本场，不自动下载；3×2 全部做完后再导出 JSON + CSV');
 addLog('info','• 条件一（区分性）：每个格子唯一音高，无预听，无误差噪声');
