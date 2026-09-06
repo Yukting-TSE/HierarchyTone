@@ -23,12 +23,16 @@
     touch-action: none; background: #f3f3f3;
   }
   .sim-el { position: relative; outline: 3px solid transparent; outline-offset: -2px; }
-  .sim-el.on { outline-color: #ff5000; z-index: 4; }
+  .sim-el.on { outline-color: #ff5000; z-index: 1; }
 
   .head {
     background: #fff;
     padding: calc(4px + env(safe-area-inset-top)) 0 8px;
-    position: sticky; top: 0; z-index: 3;
+    position: sticky; top: 0; z-index: 40;
+    isolation: isolate;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    box-shadow: 0 1px 0 rgba(0,0,0,.06);
   }
   .tabs {
     display: flex; gap: 14px; padding: 4px 14px 8px;
@@ -54,8 +58,8 @@
   .scan, .cam { font-size: 18px; width: 28px; text-align: center; flex-shrink: 0; }
   .ph { flex: 1; font-size: 15px; color: #999; }
   .go {
-    height: 32px; padding: 0 14px; border-radius: 16px; background: #ff5000;
-    color: #fff; font-size: 14px; font-weight: 700; display: flex; align-items: center;
+    height: 36px; min-width: 56px; padding: 0 16px; border-radius: 18px; background: #ff5000;
+    color: #fff; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center;
   }
 
   .icons-scroll {
@@ -534,7 +538,9 @@
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
 const DUR = 0.22, ATT = 0.035, REL = 0.05, DLY = 0.28;
 const LOUD = [1, 1.1, 1.25, 1.4, 1.55, 1.7];
-const SPEECH_RATE = 4, SPEECH_VOL = 0.42, GUIDE_RATE = 2;
+const SPEECH_RATE = 4, SPEECH_VOL = 0.28, GUIDE_RATE = 2;
+const HIT_RADIUS = 52;
+const ACTIVATE_SLACK_MS = 700;
 const page = document.getElementById("page");
 const tabs = document.getElementById("tabs");
 const icons = document.getElementById("icons");
@@ -560,7 +566,7 @@ icons.addEventListener("scroll", function () {
 let ctx = null, masterGain = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
 let sessionMeta = { participant_id: "", vision: "", sr_exp: "" };
 let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null, tryStarted = 0, panTravel = 0, adaptTimer = 0;
-let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null, lastProductKey = "", lastPanAnnounceKey = "", lastPanAnnounceAt = 0;
+let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null, lastProductKey = "", lastPanAnnounceKey = "", lastPanAnnounceAt = 0, activateTarget = null, activateAt = 0;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -617,7 +623,7 @@ function ensureAudio() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     masterGain = ctx.createGain();
-    masterGain.gain.value = 0.8;
+    masterGain.gain.value = 1;
     masterGain.connect(ctx.destination);
   }
   if (ctx.state === "suspended") ctx.resume();
@@ -650,7 +656,7 @@ function playTone(lv) {
   const i = levelIndex(lv);
   const f = F[i] || 523.25;
   const t0 = c.currentTime + 0.018;
-  const amp = Math.min(0.38, 0.22 * (LOUD[i] || 1));
+  const amp = Math.min(0.68, 0.4 * (LOUD[i] || 1));
   const o = c.createOscillator(), g = c.createGain();
   o.type = "sine";
   o.frequency.setValueAtTime(f, t0);
@@ -726,11 +732,72 @@ function announceEdge(dir) {
   playEarcon("edge");
   speakCue(dir === "start" ? "到头了" : "到尾了");
 }
-function elementFromTouch(t) {
+function pointInRect(x, y, r, pad) {
+  pad = pad || 0;
+  return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
+}
+function nearestSimEl(x, y, root, radius) {
+  const list = (root || document).querySelectorAll(".sim-el[data-sp]");
+  let best = null, bestDist = radius;
+  for (let i = 0; i < list.length; i++) {
+    const el = list[i];
+    const r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) continue;
+    const cx = Math.max(r.left, Math.min(x, r.right));
+    const cy = Math.max(r.top, Math.min(y, r.bottom));
+    const d = Math.hypot(x - cx, y - cy);
+    if (d <= bestDist) {
+      bestDist = d;
+      best = el;
+    }
+  }
+  return best;
+}
+function rawElementAt(x, y) {
   hit.style.pointerEvents = "none";
-  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const el = document.elementFromPoint(x, y);
   hit.style.pointerEvents = "auto";
-  return el && el.closest ? el.closest(".sim-el") : null;
+  return el;
+}
+function elementFromTouch(t) {
+  return resolveHit(t.clientX, t.clientY);
+}
+function resolveHit(x, y) {
+  // 搜索栏/频道置顶区优先，避免下方图片盖住后误点
+  const head = document.querySelector(".head");
+  if (head) {
+    const hr = head.getBoundingClientRect();
+    if (pointInRect(x, y, hr, 6)) {
+      const raw = rawElementAt(x, y);
+      let cell = raw && raw.closest ? raw.closest(".head .sim-el") : null;
+      if (!cell) cell = nearestSimEl(x, y, head, HIT_RADIUS);
+      if (cell) return cell;
+    }
+  }
+  const raw = rawElementAt(x, y);
+  let cell = raw && raw.closest ? raw.closest(".sim-el") : null;
+  // 若点在 sticky 头下方但命中的是被顶栏挡住的内容，改回头顶栏
+  if (head && cell && !head.contains(cell)) {
+    const hr = head.getBoundingClientRect();
+    if (y <= hr.bottom + 2) {
+      const inHead = nearestSimEl(x, y, head, HIT_RADIUS);
+      if (inHead) return inHead;
+    }
+  }
+  if (cell) return cell;
+  return nearestSimEl(x, y, document, HIT_RADIUS);
+}
+function rememberActivateTarget(cell) {
+  if (!cell) return;
+  activateTarget = cell;
+  activateAt = Date.now();
+}
+function resolveActivateTarget(touch) {
+  const sticky = activateTarget || lastFocusEl || document.querySelector(".sim-el.on");
+  if (sticky && Date.now() - activateAt < ACTIVATE_SLACK_MS) return sticky;
+  if (sticky && lastId) return sticky;
+  if (touch) return resolveHit(touch.clientX, touch.clientY);
+  return sticky;
 }
 function focusables() {
   return Array.prototype.slice.call(document.querySelectorAll(".sim-el")).filter(function (el) {
@@ -829,18 +896,29 @@ function panLocateFromCell(cell) {
     reg: reg
   };
 }
-function probeSimEl(xRatio, yPx) {
-  const x = Math.round(window.innerWidth * xRatio);
-  const y = Math.round(yPx);
-  if (y < 4 || y > window.innerHeight - 4) return null;
-  hit.style.pointerEvents = "none";
-  const raw = document.elementFromPoint(x, y);
-  hit.style.pointerEvents = "auto";
-  if (!raw || !raw.closest) return null;
-  return raw.closest(".sim-el") || raw.closest(".card") || raw.closest(".sk-item") || raw.closest(".pcol");
-}
 function panContentAtViewport() {
-  // 双指翻动：按当前轴取视口内位置，报板块 + 内容
+  // 优先按双指触点取位；没有触点时再扫视口
+  const pt = pan;
+  if (pt) {
+    if (panAxis === "tabs" && tabs && inRect(tabs, pt.y)) {
+      return panLocateFromCell(nearestSimEl(pt.x, pt.y, tabs, 80) || resolveHit(pt.x, pt.y));
+    }
+    if (panAxis === "icons" && icons && inRect(icons, pt.y)) {
+      return panLocateFromCell(nearestSimEl(pt.x, pt.y, icons, 80) || resolveHit(pt.x, pt.y));
+    }
+    if (panAxis === "seckill" && seckill && inRect(seckill, pt.y)) {
+      return panLocateFromCell(nearestSimEl(pt.x, pt.y, seckill, 80) || resolveHit(pt.x, pt.y));
+    }
+    // 页面上下翻：报双指正下方的商品，不报已划过的顶缘内容
+    const under = resolveHit(pt.x, pt.y);
+    if (under) {
+      const host = under.closest(".card") || under.closest(".sk-item") || under.closest(".pcol") || under;
+      const target = (host.classList && host.classList.contains("sim-el") && host.dataset.sp)
+        ? host
+        : (host.querySelector && host.querySelector(".sim-el[data-sp]")) || under;
+      return panLocateFromCell(target);
+    }
+  }
   if (panAxis === "seckill" && seckill) {
     const rr = seckill.getBoundingClientRect();
     const mid = (rr.left + rr.right) / 2;
@@ -876,42 +954,8 @@ function panContentAtViewport() {
       if (d < bestDist) { bestDist = d; best = ic; }
     });
     if (best) return panLocateFromCell(best);
-    const pageIdx = Math.round(icons.scrollLeft / Math.max(1, icons.clientWidth));
-    const dots = document.querySelectorAll(".dots .doti");
-    const dot = dots[pageIdx];
-    return panLocateFromCell(dot);
   }
-  const head = document.querySelector(".head");
-  const headBottom = head ? head.getBoundingClientRect().bottom : 72;
-  const yList = [
-    headBottom + 36,
-    window.innerHeight * 0.38,
-    window.innerHeight * 0.5,
-    window.innerHeight * 0.62
-  ];
-  const xList = [0.5, 0.28, 0.72];
-  let best = null;
-  let bestScore = -1;
-  for (let yi = 0; yi < yList.length; yi++) {
-    for (let xi = 0; xi < xList.length; xi++) {
-      const el = probeSimEl(xList[xi], yList[yi]);
-      if (!el) continue;
-      const cell = el.classList.contains("sim-el") ? el : (el.querySelector && el.querySelector(".sim-el[data-sp]")) || el;
-      const host = cell.closest ? (cell.closest(".card") || cell.closest(".sk-item") || cell.closest(".pcol") || cell) : cell;
-      const target = (host.classList && host.classList.contains("sim-el") && host.dataset.sp)
-        ? host
-        : (host.querySelector && host.querySelector(".sim-el[data-sp]")) || (cell.dataset && cell.dataset.sp ? cell : null);
-      if (!target || !target.dataset || !target.dataset.sp) continue;
-      let score = 10 - yi - xi * 0.2;
-      if (target.closest && (target.closest(".card") || target.closest(".sk-item") || target.closest(".pcol"))) score += 8;
-      if (target.classList.contains("tab") || target.closest(".search")) score -= 4;
-      if (score > bestScore) {
-        bestScore = score;
-        best = target;
-      }
-    }
-  }
-  return panLocateFromCell(best);
+  return null;
 }
 function maybeAnnouncePanContent(force) {
   const now = Date.now();
@@ -928,6 +972,7 @@ function maybeAnnouncePanContent(force) {
     info.cell.classList.add("on");
     lastFocusEl = info.cell;
     lastId = info.cell.dataset.id || lastId;
+    rememberActivateTarget(info.cell);
   }
   if (session && trial && !trial.phase) {
     session.events.push({ t: Date.now() - session.t0, type: "pan_locate", axis: panAxis, say: info.say });
@@ -994,6 +1039,7 @@ function focusElement(cell, opts) {
   document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
   cell.classList.add("on");
   lastFocusEl = cell;
+  rememberActivateTarget(cell);
   if (cell.dataset.id === lastId && !opts.step && !opts.forceRegion) return;
   lastId = cell.dataset.id;
   speechSynthesis.cancel();
@@ -1030,13 +1076,21 @@ function stepFocus(dir) {
   }
 }
 function leaveFence() {
-  if (lastId == null && !lastFocusEl) return;
-  lastId = null;
-  lastFocusEl = null;
+  // 双击容错窗内不丢掉激活目标，避免抬手空隙被当成离开
+  const keepActivate = activateTarget && (Date.now() - activateAt < ACTIVATE_SLACK_MS);
+  if (lastId == null && !lastFocusEl && !keepActivate) return;
+  if (!keepActivate) {
+    lastId = null;
+    lastFocusEl = null;
+    activateTarget = null;
+  }
   lastRegion = "";
   lastProductKey = "";
-  document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
+  if (!keepActivate) {
+    document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
+  }
   speechSynthesis.cancel();
+  if (keepActivate) return;
   const now = Date.now();
   if (now - leaveSpeakAt < 1200) { playEarcon("leave"); return; }
   leaveSpeakAt = now;
@@ -1136,6 +1190,7 @@ function onTouchStart(e) {
         info.cell.classList.add("on");
         lastFocusEl = info.cell;
         lastId = info.cell.dataset.id || lastId;
+        rememberActivateTarget(info.cell);
       }
     }
     panAnnounced = true;
@@ -1147,8 +1202,9 @@ function onTouchStart(e) {
   const t0 = e.changedTouches[0];
   gesture = { x: t0.clientX, y: t0.clientY, t: Date.now(), mode: "", lx: t0.clientX, ly: t0.clientY };
   const now = Date.now();
-  if (now - lastTap < 380 && lastId) {
-    const cur = document.querySelector(".sim-el.on");
+  // 双击：优先选中刚才听到的那一项，容错落点偏移
+  if (now - lastTap < ACTIVATE_SLACK_MS && (activateTarget || lastFocusEl || lastId)) {
+    const cur = resolveActivateTarget(t0);
     lastTap = 0;
     gesture = null;
     onActivate(cur);
@@ -1167,6 +1223,7 @@ function onTouchMove(e) {
     if (pan) {
       const dx = pan.x - p.x, dy = pan.y - p.y;
       const moved = applyPanDelta(dx, dy);
+      pan = p;
       if (Math.abs(moved.after - moved.before) < 0.5) {
         const edge = scrollEdge(moved.el, moved.dir);
         if (edge) announceEdge(edge);
@@ -1179,8 +1236,9 @@ function onTouchMove(e) {
         panTravel += Math.abs(dx) + Math.abs(dy);
         if (panTravel >= PAN_MIN_PX) finishTry("对，这就是翻页");
       }
+    } else {
+      pan = p;
     }
-    pan = p;
     return;
   }
   pan = null;
@@ -1404,6 +1462,7 @@ if (recallBtn) {
   }, { passive: false });
 }
 function onActivate(cur) {
+  cur = cur || resolveActivateTarget(null);
   speechSynthesis.cancel();
   if (tryMode === "activate") {
     finishTry("对，这就是选中");
@@ -1427,10 +1486,34 @@ function onActivate(cur) {
     finishTrial("success");
     return;
   }
+  // 容错：点在目标附近（同卡片/秒杀项/搜索栏）也算命中
+  if (cur && trial.tid) {
+    const near = resolveHitNearTarget(cur, trial.tid);
+    if (near) {
+      finishTrial("success");
+      return;
+    }
+  }
   trial.n_errors += 1;
   if (pitchOn && cur) playTone(levelIndex(cur.dataset.lv));
   const where = cur ? (cur.dataset.sp || "未知位置") : "未知位置";
   speak("不对，这里是" + where + "。请继续找。三指轻点可重听题目。", GUIDE_RATE);
+}
+function resolveHitNearTarget(cur, tid) {
+  if (!cur || !tid) return false;
+  if (focusTid(cur) === tid) return true;
+  const goal = document.querySelector('[data-tid="' + tid + '"]');
+  if (!goal) return false;
+  const gr = goal.getBoundingClientRect();
+  const cr = cur.getBoundingClientRect();
+  const gx = (gr.left + gr.right) / 2, gy = (gr.top + gr.bottom) / 2;
+  const cx = (cr.left + cr.right) / 2, cy = (cr.top + cr.bottom) / 2;
+  if (Math.hypot(gx - cx, gy - cy) <= HIT_RADIUS * 1.35) return true;
+  // 同一商品卡 / 同一秒杀项 / 同一搜索条内也算
+  const sameCard = cur.closest(".card") && goal.closest(".card") && cur.closest(".card") === goal.closest(".card");
+  const sameSk = cur.closest(".sk-item") && goal.closest(".sk-item") && cur.closest(".sk-item") === goal.closest(".sk-item");
+  const sameSearch = cur.closest(".search") && goal.closest(".search");
+  return !!(sameCard || sameSk || sameSearch);
 }
 function isoNow(ms) {
   return new Date(ms || Date.now()).toISOString();
