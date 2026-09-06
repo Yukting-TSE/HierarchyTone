@@ -619,18 +619,52 @@ function levelIndex(lv) {
   return isNaN(n) ? 0 : Math.min(5, Math.max(0, n));
 }
 function ensureAudio() {
-  if (navigator.audioSession) { try { navigator.audioSession.type = "playback"; } catch (err) {} }
-  if (!ctx) {
-    ctx = new (window.AudioContext || window.webkitAudioContext)();
-    masterGain = ctx.createGain();
-    masterGain.gain.value = 1;
-    masterGain.connect(ctx.destination);
+  try {
+    if (navigator.audioSession) {
+      try { navigator.audioSession.type = "playback"; } catch (err) {}
+    }
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 1;
+      masterGain.connect(ctx.destination);
+    }
+    if (ctx.state === "suspended" || ctx.state === "interrupted") {
+      try { ctx.resume(); } catch (err) {}
+    }
+    return ctx;
+  } catch (err) {
+    return null;
   }
-  if (ctx.state === "suspended") ctx.resume();
-  return ctx;
 }
-function audioOut() {
-  return masterGain || ctx.destination;
+function withAudio(fn) {
+  // iOS/Safari：必须等 resume 完成后再排程，否则音高会被静默丢掉，只剩人声
+  const c = ensureAudio();
+  if (!c) return;
+  const run = function () {
+    try {
+      if (masterGain) masterGain.gain.value = 1;
+      fn(c);
+    } catch (err) {}
+  };
+  if (c.state === "running") {
+    run();
+    return;
+  }
+  try {
+    const p = c.resume();
+    if (p && typeof p.then === "function") {
+      p.then(function () { run(); }).catch(function () { run(); });
+    } else {
+      run();
+    }
+  } catch (err) {
+    run();
+  }
+}
+function audioOut(c) {
+  // 同时接到 master 与 destination，避免单链路静音
+  return masterGain || c.destination;
 }
 function stopTones() {
   if (!ctx) { liveOsc = []; return; }
@@ -641,56 +675,63 @@ function stopTones() {
         const cur = Math.max(o._gain.gain.value, 0.0001);
         o._gain.gain.cancelScheduledValues(t);
         o._gain.gain.setValueAtTime(cur, t);
-        o._gain.gain.linearRampToValueAtTime(0.0001, t + 0.03);
+        o._gain.gain.linearRampToValueAtTime(0.0001, t + 0.02);
       }
-      o.stop(t + 0.04);
+      o.stop(t + 0.03);
     } catch (err) {}
   });
   liveOsc = [];
 }
 function playTone(lv) {
-  // 纯正弦 + 缓起缓落，避免起音爆音/刺啦
-  const c = ensureAudio(); if (!c) return;
-  if (c.state === "suspended") c.resume();
-  stopTones();
-  const i = levelIndex(lv);
-  const f = F[i] || 523.25;
-  const t0 = c.currentTime + 0.018;
-  const amp = Math.min(0.68, 0.4 * (LOUD[i] || 1));
-  const o = c.createOscillator(), g = c.createGain();
-  o.type = "sine";
-  o.frequency.setValueAtTime(f, t0);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.linearRampToValueAtTime(amp, t0 + ATT);
-  g.gain.linearRampToValueAtTime(amp * 0.92, t0 + DUR - REL);
-  g.gain.linearRampToValueAtTime(0.0001, t0 + DUR);
-  o.connect(g); g.connect(audioOut());
-  o._gain = g;
-  o.start(t0); o.stop(t0 + DUR + 0.03);
-  liveOsc.push(o);
+  withAudio(function (c) {
+    stopTones();
+    const i = levelIndex(lv);
+    const f = F[i] || 523.25;
+    const t0 = c.currentTime + 0.003;
+    const g0 = Math.min(0.8, 0.5 * (LOUD[i] || 1));
+    [[1, 1], [2, 0.18]].forEach(function (h) {
+      const o = c.createOscillator(), g = c.createGain();
+      const amp = Math.min(0.8, g0 * h[1]);
+      o.type = "sine";
+      o.frequency.setValueAtTime(f * h[0], t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(amp, t0 + 0.016);
+      g.gain.linearRampToValueAtTime(amp * 0.88, t0 + DUR - 0.035);
+      g.gain.linearRampToValueAtTime(0.0001, t0 + DUR);
+      o.connect(g);
+      g.connect(c.destination);
+      if (masterGain) {
+        try { g.connect(masterGain); } catch (err) {}
+      }
+      o._gain = g;
+      o.start(t0);
+      o.stop(t0 + DUR + 0.05);
+      liveOsc.push(o);
+    });
+  });
 }
 function playEarcon(kind) {
-  // 柔和正弦短提示，避免方波「刺啦」叠在音高前
-  try {
-    const c = ensureAudio(); if (!c) return;
-    const t0 = c.currentTime + 0.01;
+  withAudio(function (c) {
+    const t0 = c.currentTime + 0.002;
     const o = c.createOscillator(), g = c.createGain();
     o.type = "sine";
     const map = {
-      leave: [210, 0.08, 0.06],
-      edge: [640, 0.06, 0.05],
-      hpan: [420, 0.05, 0.04],
-      vpan: [310, 0.05, 0.04],
-      step: [500, 0.045, 0.035]
+      leave: [210, 0.08, 0.07],
+      edge: [640, 0.06, 0.06],
+      hpan: [420, 0.05, 0.05],
+      vpan: [310, 0.05, 0.05],
+      step: [500, 0.045, 0.045]
     };
     const cfg = map[kind] || map.step;
     o.frequency.setValueAtTime(cfg[0], t0);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.linearRampToValueAtTime(cfg[2], t0 + 0.012);
+    g.gain.linearRampToValueAtTime(cfg[2], t0 + 0.01);
     g.gain.linearRampToValueAtTime(0.0001, t0 + cfg[1]);
-    o.connect(g); g.connect(audioOut());
-    o.start(t0); o.stop(t0 + cfg[1] + 0.03);
-  } catch (err) {}
+    o.connect(g);
+    g.connect(c.destination);
+    o.start(t0);
+    o.stop(t0 + cfg[1] + 0.03);
+  });
 }
 function speakCue(txt) {
   // 短提示用稍慢语速，避免和内容播报糊在一起
@@ -1002,7 +1043,8 @@ function announceNode(cell, opts) {
   if (!say) return;
   if (pitchOn) {
     playTone(levelIndex(cell.dataset.lv));
-    setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, (DUR + DLY) * 1000);
+    // 等人声前先留出音高时间；AudioContext 若晚一点 resume，也多留余量
+    setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, (DUR + DLY + 0.12) * 1000);
   } else {
     setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, 80);
   }
@@ -1158,6 +1200,7 @@ function applyPanDelta(dx, dy) {
 }
 function onTouchStart(e) {
   e.preventDefault();
+  ensureAudio();
   if (!ready) return;
   if (e.touches.length >= 3) {
     pan = null;
@@ -2060,7 +2103,18 @@ function unlock() {
   }
   armed = true;
   mandarinVoice = pickMandarinVoice();
-  ensureAudio();
+  withAudio(function (c) {
+    // 开场轻触一声，确认音高通路已唤醒
+    const o = c.createOscillator(), g = c.createGain();
+    const t0 = c.currentTime;
+    o.frequency.value = 523.25;
+    o.type = "sine";
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(0.25, t0 + 0.01);
+    g.gain.linearRampToValueAtTime(0.0001, t0 + 0.08);
+    o.connect(g); g.connect(c.destination);
+    o.start(t0); o.stop(t0 + 0.1);
+  });
   gate.remove();
   tut = 0;
   runTut();
