@@ -805,8 +805,42 @@ function locatePhrase(cell, opts) {
   if (!parts.length) parts.push(cell.dataset.sp || "未知位置");
   return { say: parts.join("。"), reg: reg, ctx: ctx, regionChanged: regionChanged };
 }
+function panLocateFromCell(cell) {
+  // 翻页定位：板块 + 该项原本信息（不加第几件）
+  if (!cell || !cell.dataset || !cell.dataset.sp) return null;
+  const reg = regionOf(cell);
+  const ctx = productContext(cell);
+  const parts = [];
+  if (reg && reg.name) parts.push(reg.name);
+  if (ctx && ctx.product) {
+    const name = shortProductName(ctx.product) || ctx.product;
+    if (name && parts.indexOf(name) === -1) parts.push(name);
+    if (ctx.host !== cell) {
+      const part = shortProductName(cell.dataset.sp) || cell.dataset.sp;
+      if (part && part !== name) parts.push("现在在" + part);
+    }
+  } else {
+    parts.push(cell.dataset.sp);
+  }
+  return {
+    key: "pan-" + (ctx ? ctx.key : (reg.id + "-" + (cell.dataset.id || cell.dataset.sp))),
+    say: parts.join("。"),
+    cell: cell,
+    reg: reg
+  };
+}
+function probeSimEl(xRatio, yPx) {
+  const x = Math.round(window.innerWidth * xRatio);
+  const y = Math.round(yPx);
+  if (y < 4 || y > window.innerHeight - 4) return null;
+  hit.style.pointerEvents = "none";
+  const raw = document.elementFromPoint(x, y);
+  hit.style.pointerEvents = "auto";
+  if (!raw || !raw.closest) return null;
+  return raw.closest(".sim-el") || raw.closest(".card") || raw.closest(".sk-item") || raw.closest(".pcol");
+}
 function panContentAtViewport() {
-  // 双指翻动：只播该项原本的 data-sp，不加「第几件 / 板块。」前缀
+  // 双指翻动：按当前轴取视口内位置，报板块 + 内容
   if (panAxis === "seckill" && seckill) {
     const rr = seckill.getBoundingClientRect();
     const mid = (rr.left + rr.right) / 2;
@@ -817,8 +851,7 @@ function panContentAtViewport() {
       const d = Math.abs((r.left + r.right) / 2 - mid);
       if (d < bestDist) { bestDist = d; best = sk; }
     });
-    if (!best || !best.dataset.sp) return null;
-    return { key: "pan-sk-" + (best.dataset.id || best.dataset.sp), say: best.dataset.sp };
+    return panLocateFromCell(best);
   }
   if (panAxis === "tabs" && tabs) {
     const rr = tabs.getBoundingClientRect();
@@ -829,40 +862,79 @@ function panContentAtViewport() {
       const d = Math.abs((r.left + r.right) / 2 - mid);
       if (d < bestDist) { bestDist = d; best = tab; }
     });
-    if (!best || !best.dataset.sp) return null;
-    return { key: "pan-tab-" + (best.dataset.id || best.dataset.sp), say: best.dataset.sp };
+    return panLocateFromCell(best);
   }
   if (panAxis === "icons" && icons) {
+    const rr = icons.getBoundingClientRect();
+    const midX = (rr.left + rr.right) / 2;
+    const midY = (rr.top + rr.bottom) / 2;
+    let best = null, bestDist = 1e9;
+    Array.prototype.forEach.call(icons.querySelectorAll(".icon"), function (ic) {
+      const r = ic.getBoundingClientRect();
+      if (r.right < rr.left || r.left > rr.right) return;
+      const d = Math.hypot((r.left + r.right) / 2 - midX, (r.top + r.bottom) / 2 - midY);
+      if (d < bestDist) { bestDist = d; best = ic; }
+    });
+    if (best) return panLocateFromCell(best);
     const pageIdx = Math.round(icons.scrollLeft / Math.max(1, icons.clientWidth));
     const dots = document.querySelectorAll(".dots .doti");
     const dot = dots[pageIdx];
-    if (dot && dot.dataset.sp) return { key: "pan-icons-" + pageIdx, say: dot.dataset.sp };
-    return null;
+    return panLocateFromCell(dot);
   }
-  const x = Math.round(window.innerWidth * 0.5);
-  const y = Math.round(window.innerHeight * 0.34);
-  hit.style.pointerEvents = "none";
-  const raw = document.elementFromPoint(x, y);
-  hit.style.pointerEvents = "auto";
-  const cell = raw && raw.closest ? raw.closest(".sim-el") : null;
-  if (!cell || !cell.dataset.sp) return null;
-  return { key: "pan-" + (cell.dataset.id || cell.dataset.sp), say: cell.dataset.sp };
+  const head = document.querySelector(".head");
+  const headBottom = head ? head.getBoundingClientRect().bottom : 72;
+  const yList = [
+    headBottom + 36,
+    window.innerHeight * 0.38,
+    window.innerHeight * 0.5,
+    window.innerHeight * 0.62
+  ];
+  const xList = [0.5, 0.28, 0.72];
+  let best = null;
+  let bestScore = -1;
+  for (let yi = 0; yi < yList.length; yi++) {
+    for (let xi = 0; xi < xList.length; xi++) {
+      const el = probeSimEl(xList[xi], yList[yi]);
+      if (!el) continue;
+      const cell = el.classList.contains("sim-el") ? el : (el.querySelector && el.querySelector(".sim-el[data-sp]")) || el;
+      const host = cell.closest ? (cell.closest(".card") || cell.closest(".sk-item") || cell.closest(".pcol") || cell) : cell;
+      const target = (host.classList && host.classList.contains("sim-el") && host.dataset.sp)
+        ? host
+        : (host.querySelector && host.querySelector(".sim-el[data-sp]")) || (cell.dataset && cell.dataset.sp ? cell : null);
+      if (!target || !target.dataset || !target.dataset.sp) continue;
+      let score = 10 - yi - xi * 0.2;
+      if (target.closest && (target.closest(".card") || target.closest(".sk-item") || target.closest(".pcol"))) score += 8;
+      if (target.classList.contains("tab") || target.closest(".search")) score -= 4;
+      if (score > bestScore) {
+        bestScore = score;
+        best = target;
+      }
+    }
+  }
+  return panLocateFromCell(best);
 }
-function maybeAnnouncePanContent() {
+function maybeAnnouncePanContent(force) {
   const now = Date.now();
-  if (now - lastPanAnnounceAt < 650) return;
+  if (!force && now - lastPanAnnounceAt < 420) return;
   const info = panContentAtViewport();
   if (!info || !info.say) return;
-  if (info.key === lastPanAnnounceKey) return;
+  if (!force && info.key === lastPanAnnounceKey) return;
   lastPanAnnounceKey = info.key;
   lastPanAnnounceAt = now;
+  if (info.reg && info.reg.id) lastRegion = info.reg.id;
   speakCue(info.say);
+  if (info.cell) {
+    document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
+    info.cell.classList.add("on");
+    lastFocusEl = info.cell;
+    lastId = info.cell.dataset.id || lastId;
+  }
   if (session && trial && !trial.phase) {
     session.events.push({ t: Date.now() - session.t0, type: "pan_locate", axis: panAxis, say: info.say });
   }
 }
 function announceNode(cell, opts) {
-  // 滑动/触探：只播原本 data-sp，不加第几件或板块前缀
+  // 触探：报原本信息；左右轻扫时补板块，方便定位
   opts = opts || {};
   if (!cell) return;
   const reg = regionOf(cell);
@@ -871,8 +943,11 @@ function announceNode(cell, opts) {
   const ctx = productContext(cell);
   if (ctx) lastProductKey = ctx.key;
   else lastProductKey = "";
-  const say = cell.dataset.sp || "";
-  // 有音高时不再叠区域/步进耳标，避免音高前「刺啦」
+  let say = cell.dataset.sp || "";
+  if (opts.step || opts.forceRegion) {
+    const loc = locatePhrase(cell, { forceRegion: true, step: !!opts.step });
+    say = loc.say || say;
+  }
   if (!pitchOn) {
     if (regionChanged) {
       playEarcon(reg.id === "tabs" || reg.id === "icons" || reg.id === "seckill" ? "hpan" : "vpan");
@@ -1040,16 +1115,32 @@ function onTouchStart(e) {
     pan = midpoint(e.touches);
     panAxis = axisForY(pan.y);
     panAnnounced = false;
+    lastPanAnnounceKey = "";
     speechSynthesis.cancel();
     gesture = null;
     const meta = panMeta(panAxis);
     playEarcon(meta.dir === "h" ? "hpan" : "vpan");
-    // 横条提示里补一句：上下仍可翻页
-    const say = meta.dir === "h" ? (meta.say + "。上下可翻页") : meta.say;
+    // 起手先报当前位置（板块+内容），不再只说「上下翻商品页面」
+    const info = panContentAtViewport();
+    const axisHint = meta.dir === "h" ? "左右翻" : "上下翻";
+    const say = info && info.say
+      ? (axisHint + "。" + info.say)
+      : (meta.dir === "h" ? meta.say + "。上下可翻页" : meta.say);
     speakCue(say);
+    if (info) {
+      lastPanAnnounceKey = info.key;
+      lastPanAnnounceAt = Date.now();
+      if (info.reg && info.reg.id) lastRegion = info.reg.id;
+      if (info.cell) {
+        document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
+        info.cell.classList.add("on");
+        lastFocusEl = info.cell;
+        lastId = info.cell.dataset.id || lastId;
+      }
+    }
     panAnnounced = true;
     if (session && trial && !trial.phase) {
-      session.events.push({ t: Date.now() - session.t0, type: "pan_start", axis: panAxis });
+      session.events.push({ t: Date.now() - session.t0, type: "pan_start", axis: panAxis, say: say });
     }
     return;
   }
@@ -1082,7 +1173,7 @@ function onTouchMove(e) {
       } else if (Math.abs(moved.after - moved.before) >= 2) {
         if (moved.movedAxis === "page") panAxis = "page";
         else if (moved.movedAxis) panAxis = moved.movedAxis;
-        maybeAnnouncePanContent();
+        maybeAnnouncePanContent(false);
       }
       if (tryMode === "pan") {
         panTravel += Math.abs(dx) + Math.abs(dy);
