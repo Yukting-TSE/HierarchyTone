@@ -778,7 +778,7 @@ function locatePhrase(cell, opts) {
   return { say: parts.join("。"), reg: reg, ctx: ctx, regionChanged: regionChanged };
 }
 function panContentAtViewport() {
-  // 双指翻动后：根据视口中央附近的内容，报「板块 + 商品」
+  // 双指翻动：只播该项原本的 data-sp，不加「第几件 / 板块。」前缀
   if (panAxis === "seckill" && seckill) {
     const rr = seckill.getBoundingClientRect();
     const mid = (rr.left + rr.right) / 2;
@@ -789,8 +789,8 @@ function panContentAtViewport() {
       const d = Math.abs((r.left + r.right) / 2 - mid);
       if (d < bestDist) { bestDist = d; best = sk; }
     });
-    if (!best) return null;
-    return { key: "pan-sk-" + (best.dataset.id || best.dataset.sp || ""), say: "限时秒杀。" + shortProductName(best.dataset.sp) };
+    if (!best || !best.dataset.sp) return null;
+    return { key: "pan-sk-" + (best.dataset.id || best.dataset.sp), say: best.dataset.sp };
   }
   if (panAxis === "tabs" && tabs) {
     const rr = tabs.getBoundingClientRect();
@@ -801,27 +801,24 @@ function panContentAtViewport() {
       const d = Math.abs((r.left + r.right) / 2 - mid);
       if (d < bestDist) { bestDist = d; best = tab; }
     });
-    if (!best) return null;
-    return { key: "pan-tab-" + (best.dataset.id || best.dataset.sp || ""), say: "频道栏。" + shortProductName(best.dataset.sp) };
+    if (!best || !best.dataset.sp) return null;
+    return { key: "pan-tab-" + (best.dataset.id || best.dataset.sp), say: best.dataset.sp };
   }
   if (panAxis === "icons" && icons) {
-    const pageIdx = Math.round(icons.scrollLeft / Math.max(1, icons.clientWidth)) + 1;
-    return { key: "pan-icons-" + pageIdx, say: "快捷入口。第" + pageIdx + "页" };
+    const pageIdx = Math.round(icons.scrollLeft / Math.max(1, icons.clientWidth));
+    const dots = document.querySelectorAll(".dots .doti");
+    const dot = dots[pageIdx];
+    if (dot && dot.dataset.sp) return { key: "pan-icons-" + pageIdx, say: dot.dataset.sp };
+    return null;
   }
-  // 默认：页面上下翻，取视口约 1/3 高度处内容
   const x = Math.round(window.innerWidth * 0.5);
   const y = Math.round(window.innerHeight * 0.34);
   hit.style.pointerEvents = "none";
   const raw = document.elementFromPoint(x, y);
   hit.style.pointerEvents = "auto";
   const cell = raw && raw.closest ? raw.closest(".sim-el") : null;
-  if (!cell) return null;
-  const ctx = productContext(cell);
-  const reg = regionOf(cell);
-  if (ctx) {
-    return { key: "pan-" + ctx.key, say: ctx.region + "。" + shortProductName(ctx.product) };
-  }
-  return { key: "pan-" + reg.id + "-" + (cell.dataset.id || ""), say: reg.name + "。" + shortProductName(cell.dataset.sp) };
+  if (!cell || !cell.dataset.sp) return null;
+  return { key: "pan-" + (cell.dataset.id || cell.dataset.sp), say: cell.dataset.sp };
 }
 function maybeAnnouncePanContent() {
   const now = Date.now();
@@ -837,17 +834,21 @@ function maybeAnnouncePanContent() {
   }
 }
 function announceNode(cell, opts) {
+  // 滑动/触探：只播原本 data-sp，不加第几件或板块前缀
   opts = opts || {};
   if (!cell) return;
-  const loc = locatePhrase(cell, opts);
-  lastRegion = loc.reg.id || lastRegion;
-  if (loc.ctx) lastProductKey = loc.ctx.key;
+  const reg = regionOf(cell);
+  const regionChanged = opts.forceRegion || (reg.id && reg.id !== lastRegion);
+  lastRegion = reg.id || lastRegion;
+  const ctx = productContext(cell);
+  if (ctx) lastProductKey = ctx.key;
   else lastProductKey = "";
-  if (loc.regionChanged) {
-    playEarcon(loc.reg.id === "tabs" || loc.reg.id === "icons" || loc.reg.id === "seckill" ? "hpan" : "vpan");
+  if (regionChanged) {
+    playEarcon(reg.id === "tabs" || reg.id === "icons" || reg.id === "seckill" ? "hpan" : "vpan");
   }
   if (opts.step) playEarcon("step");
-  const say = loc.say;
+  const say = cell.dataset.sp || "";
+  if (!say) return;
   if (pitchOn) {
     playTone(levelIndex(cell.dataset.lv));
     setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, (DUR + DLY) * 1000);
@@ -1257,13 +1258,13 @@ function onActivate(cur) {
   }
   if (tryMode === "explore" || tryMode === "adapt" || tryMode === "pan") {
     if (pitchOn && cur) playTone(levelIndex(cur.dataset.lv));
-    const where = cur ? locatePhrase(cur, { forceRegion: true }).say : "";
+    const where = cur ? (cur.dataset.sp || "") : "";
     speak("选中。" + where, GUIDE_RATE);
     return;
   }
   if (!trial) {
     if (pitchOn) playTone(cur ? levelIndex(cur.dataset.lv) : 0);
-    const where = cur ? locatePhrase(cur, { forceRegion: true }).say : "";
+    const where = cur ? (cur.dataset.sp || "") : "";
     setTimeout(function () { speak("选中。" + where); }, pitchOn ? (DUR + DLY) * 1000 : 80);
     return;
   }
@@ -1275,7 +1276,7 @@ function onActivate(cur) {
   }
   trial.n_errors += 1;
   if (pitchOn && cur) playTone(levelIndex(cur.dataset.lv));
-  const where = cur ? locatePhrase(cur, { forceRegion: true }).say : "未知位置";
+  const where = cur ? (cur.dataset.sp || "未知位置") : "未知位置";
   speak("不对，这里是" + where + "。请继续找。三指轻点可重听题目。", GUIDE_RATE);
 }
 function isoNow(ms) {
@@ -1337,10 +1338,10 @@ function announceTrial() {
     body: [
       condTxt,
       trial.say,
-      "单指慢滑会报板块和商品名。双指上下翻时，会报当前板块下的那个商品。忘记题目：三指轻点或点顶部重听本题。找到以后快速点两下。"
+      "单指慢滑会播该项原本的名称信息。双指上下翻时，也会播当前项的原本信息。忘记题目：三指轻点或点顶部重听本题。找到以后快速点两下。"
     ],
     hint: "点屏幕任意位置开始本题",
-    say: kind + "。" + condTxt + trial.say + "单指慢滑报板块和商品名。双指上下翻会报当前板块下的商品。忘记题目就三指轻点重听。找到以后快速点两下。",
+    say: kind + "。" + condTxt + trial.say + "单指慢滑会播该项原本的名称信息。双指上下翻也会播原本信息。忘记题目就三指轻点重听。找到以后快速点两下。",
     next: startTrial
   });
 }
@@ -1689,14 +1690,14 @@ function runTut() {
         title: "这是实验用的淘宝首页",
         body: [
           "不是真的购物。请戴上耳机。",
-          "一根手指慢慢滑：报板块和商品名；摸到价钱或图片会说「现在在……」。",
+          "一根手指慢慢滑：播该项原本的名称信息。",
           "一根手指左右轻扫：像手机读屏一样，切到上一项或下一项。",
-          "两根手指上下滑：会报当前板块下的那个商品；左右滑用于频道、秒杀等横条。翻到头会提示。",
+          "两根手指上下滑：也会播当前项的原本信息；左右滑用于频道、秒杀等横条。翻到头会提示。",
           "做题时若忘记题目：三指轻点屏幕，或点顶部「重听本题」。",
           "摸到要选的东西，在那一项上快速点两下才算选中。接下来每一层都会先连着播三次。"
         ],
         hint: "点屏幕任意位置继续",
-        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，报板块和商品名。两根手指上下滑，会报当前板块下的那个商品。做题忘记题目时，三指轻点重听。摸到要选的东西，快速点两下才算选中。请点屏幕任意位置继续。",
+        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，会播该项原本的名称信息。两根手指上下滑，也会播原本信息。做题忘记题目时，三指轻点重听。摸到要选的东西，快速点两下才算选中。请点屏幕任意位置继续。",
         next: tutAdvance
       });
     },
@@ -1790,7 +1791,7 @@ function runTut() {
         ghost: 1,
         say: "请用一根手指慢慢滑。点屏幕开始滑。",
         next: function () {
-          beginTry("explore", true, nextTut, "请用一根手指在屏幕上慢慢滑。摸到商品时，会报板块和商品名。滑过三个不同的地方，就会自动继续。");
+          beginTry("explore", true, nextTut, "请用一根手指在屏幕上慢慢滑。摸到时会播该项原本的名称信息。滑过三个不同的地方，就会自动继续。");
         }
       });
     },
@@ -1808,7 +1809,7 @@ function runTut() {
         ghost: 1,
         say: "接下来试双指翻页。点屏幕开始试。",
         next: function () {
-          beginTry("pan", true, nextTut, "请用两根手指上下滑。翻动时会报当前板块下的那个商品。翻一段就会继续。");
+          beginTry("pan", true, nextTut, "请用两根手指上下滑。翻动时会播当前项的原本信息。翻一段就会继续。");
         }
       });
     }
