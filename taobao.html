@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -15,6 +15,8 @@
     font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     background: #f3f3f3; color: #111;
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    touch-action: none;
+    -ms-touch-action: none;
   }
   #page {
     position: absolute; left: 0; right: 0; top: 0;
@@ -242,6 +244,7 @@
     border: 0; margin: 0; background: #111; color: #fff;
     font: 700 28px/1.5 -apple-system, "PingFang SC", sans-serif;
     -webkit-appearance: none; appearance: none;
+    touch-action: none;
   }
   #gate small { display: block; margin-top: 14px; font-size: 18px; font-weight: 500; opacity: .7; }
   #gate .sub { display: block; margin-top: 8px; font-size: 16px; font-weight: 500; opacity: .55; }
@@ -294,7 +297,7 @@
   #recall small { display: block; margin-top: 4px; font-size: 13px; font-weight: 500; opacity: .7; }
   #guide.form {
     justify-content: flex-start;
-    touch-action: auto;
+    touch-action: pan-y;
     overflow: auto;
     padding: 22px 18px calc(28px + env(safe-area-inset-bottom));
   }
@@ -2135,6 +2138,26 @@ function unlock() {
   runTut();
 }
 gate.addEventListener("click", unlock);
+// 屏蔽双指捏合 / 双击放大，避免和实验手势冲突（iOS 常忽略 user-scalable=no）
+(function blockPageZoom() {
+  function stop(e) { e.preventDefault(); }
+  ["gesturestart", "gesturechange", "gestureend"].forEach(function (type) {
+    document.addEventListener(type, stop, { passive: false });
+  });
+  document.addEventListener("touchmove", function (e) {
+    if (e.touches && e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+  var lastTouchEnd = 0;
+  document.addEventListener("touchend", function (e) {
+    var now = Date.now();
+    if (now - lastTouchEnd <= 320) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+  try {
+    document.documentElement.style.touchAction = "none";
+    document.body.style.touchAction = "none";
+  } catch (err) {}
+})();
 </script>
 </body>
 </html>
