@@ -285,16 +285,8 @@
   }
   #guide.ghost > * { display: none; }
   #taskbar { display: none !important; }
-  #recall {
-    display: none; position: absolute; left: 10px; right: 10px; z-index: 45;
-    top: calc(8px + env(safe-area-inset-top));
-    appearance: none; border: 0; border-radius: 14px;
-    padding: 12px 14px; background: rgba(17,17,17,.88); color: #fff;
-    font: 700 16px/1.35 -apple-system, "PingFang SC", sans-serif;
-    text-align: center; touch-action: manipulation;
-  }
-  #recall.show { display: block; }
-  #recall small { display: block; margin-top: 4px; font-size: 13px; font-weight: 500; opacity: .7; }
+  /* 找目标题不再显示顶部/底部黑色重听条，改用三指轻点，避免挡住搜索栏 */
+  #recall { display: none !important; }
   #guide.form {
     justify-content: flex-start;
     touch-action: pan-y;
@@ -762,13 +754,24 @@ function regionOf(el) {
   if (el.closest && el.closest("#feed")) return { id: "feed", name: "商品列表", hint: "这里上下滑可看更多商品" };
   if (el.closest && (el.closest("#tabbar") || el.classList.contains("nav"))) return { id: "nav", name: "底部导航", hint: "" };
   if (el.closest && el.closest("#coupon")) return { id: "coupon", name: "优惠条", hint: "" };
-  return { id: "page", name: "页面", hint: "页面可上下翻" };
+  return { id: "page", name: "页面", hint: "页面可上翻下翻" };
 }
 function panMeta(axis) {
-  if (axis === "tabs") return { el: tabs, dir: "h", say: "左右翻，频道栏" };
-  if (axis === "icons") return { el: icons, dir: "h", say: "左右翻，快捷入口" };
-  if (axis === "seckill") return { el: seckill, dir: "h", say: "左右翻，限时秒杀" };
-  return { el: page, dir: "v", say: "上下翻，商品页面" };
+  if (axis === "tabs") return { el: tabs, dir: "h", say: "频道栏" };
+  if (axis === "icons") return { el: icons, dir: "h", say: "快捷入口" };
+  if (axis === "seckill") return { el: seckill, dir: "h", say: "限时秒杀" };
+  return { el: page, dir: "v", say: "商品页面" };
+}
+function panDirHint(dir, dx, dy) {
+  // 按手指滑动方向报：上翻/下翻、左翻/右翻
+  if (dir === "h") return dx > 0 ? "右翻" : "左翻";
+  return dy > 0 ? "下翻" : "上翻";
+}
+function panDirLabel(moved) {
+  const delta = moved.after - moved.before;
+  if (Math.abs(delta) < 0.5) return "";
+  if (moved.dir === "h") return delta > 0 ? "右翻" : "左翻";
+  return delta > 0 ? "下翻" : "上翻";
 }
 function scrollEdge(el, dir) {
   if (!el) return "";
@@ -1013,16 +1016,17 @@ function panContentAtViewport() {
   }
   return null;
 }
-function maybeAnnouncePanContent(force) {
+function maybeAnnouncePanContent(force, dirLabel) {
   const now = Date.now();
   if (!force && now - lastPanAnnounceAt < 420) return;
   const info = panContentAtViewport();
   if (!info || !info.say) return;
-  if (!force && info.key === lastPanAnnounceKey) return;
-  lastPanAnnounceKey = info.key;
+  const say = dirLabel ? (dirLabel + "。" + info.say) : info.say;
+  if (!force && say === lastPanAnnounceKey) return;
+  lastPanAnnounceKey = say;
   lastPanAnnounceAt = now;
   if (info.reg && info.reg.id) lastRegion = info.reg.id;
-  speakCue(info.say);
+  speakCue(say);
   if (info.cell) {
     document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
     info.cell.classList.add("on");
@@ -1031,7 +1035,7 @@ function maybeAnnouncePanContent(force) {
     rememberActivateTarget(info.cell);
   }
   if (session && trial && !trial.phase) {
-    session.events.push({ t: Date.now() - session.t0, type: "pan_locate", axis: panAxis, say: info.say });
+    session.events.push({ t: Date.now() - session.t0, type: "pan_locate", axis: panAxis, dir: dirLabel || "", say: say });
   }
 }
 function announceNode(cell, opts) {
@@ -1065,8 +1069,9 @@ function announceNode(cell, opts) {
   }
 }
 function setRecallVisible(on) {
+  // 不再显示黑色重听条，避免挡住搜索栏；重听只保留三指轻点
   if (!recallBtn) return;
-  recallBtn.classList.toggle("show", !!on);
+  recallBtn.classList.remove("show");
 }
 function repeatTrialPrompt() {
   if (tryMode) {
@@ -1086,7 +1091,7 @@ function repeatTrialPrompt() {
   stopTones();
   playEarcon("step");
   const kind = trial.practice ? "练习题" : "本题";
-  const say = kind + "。" + (trial.title || "") + "。" + (trial.say || "") + "。找到以后，在那一项上快速点两下。若再忘记，三指轻点屏幕，或点顶部重听本题。";
+  const say = kind + "。" + (trial.title || "") + "。" + (trial.say || "") + "。找到以后，在那一项上快速点两下。若再忘记，三指轻点屏幕重听本题。";
   speak(say, GUIDE_RATE);
   if (session) session.events.push({ t: Date.now() - session.t0, type: "repeat_prompt" });
 }
@@ -1232,12 +1237,9 @@ function onTouchStart(e) {
     gesture = null;
     const meta = panMeta(panAxis);
     playEarcon(meta.dir === "h" ? "hpan" : "vpan");
-    // 起手先报当前位置（板块+内容），不再只说「上下翻商品页面」
+    // 起手先报当前位置；具体上翻/下翻/左翻/右翻在滑动后再报
     const info = panContentAtViewport();
-    const axisHint = meta.dir === "h" ? "左右翻" : "上下翻";
-    const say = info && info.say
-      ? (axisHint + "。" + info.say)
-      : (meta.dir === "h" ? meta.say + "。上下可翻页" : meta.say);
+    const say = info && info.say ? info.say : meta.say;
     speakCue(say);
     if (info) {
       lastPanAnnounceKey = info.key;
@@ -1288,7 +1290,7 @@ function onTouchMove(e) {
       } else if (Math.abs(moved.after - moved.before) >= 2) {
         if (moved.movedAxis === "page") panAxis = "page";
         else if (moved.movedAxis) panAxis = moved.movedAxis;
-        maybeAnnouncePanContent(false);
+        maybeAnnouncePanContent(false, panDirLabel(moved));
       }
       if (tryMode === "pan") {
         panTravel += Math.abs(dx) + Math.abs(dy);
@@ -1635,10 +1637,10 @@ function announceTrial() {
     body: [
       condTxt,
       trial.say,
-      "单指慢滑会播该项原本的名称信息。双指上下翻时，也会播当前项的原本信息。忘记题目：三指轻点或点顶部重听本题。找到以后快速点两下。"
+      "单指慢滑会播该项原本的名称信息。双指上翻或下翻时，也会播当前项的原本信息。忘记题目：三指轻点重听。找到以后快速点两下。"
     ],
     hint: "点屏幕任意位置开始本题",
-    say: kind + "。" + condTxt + trial.say + "单指慢滑会播该项原本的名称信息。双指上下翻也会播原本信息。忘记题目就三指轻点重听。找到以后快速点两下。",
+    say: kind + "。" + condTxt + trial.say + "单指慢滑会播该项原本的名称信息。双指上翻或下翻也会播原本信息。忘记题目就三指轻点重听。找到以后快速点两下。",
     next: startTrial
   });
 }
@@ -1989,12 +1991,12 @@ function runTut() {
           "不是真的购物。请戴上耳机。",
           "一根手指慢慢滑：播该项原本的名称信息。",
           "一根手指左右轻扫：像手机读屏一样，切到上一项或下一项。",
-          "两根手指上下滑：也会播当前项的原本信息；左右滑用于频道、秒杀等横条。翻到头会提示。",
-          "做题时若忘记题目：三指轻点屏幕，或点顶部「重听本题」。",
+          "两根手指上翻或下翻：也会播当前项的原本信息；左翻右翻用于频道、秒杀等横条。翻到头会提示。",
+          "做题时若忘记题目：三指轻点屏幕重听。",
           "摸到要选的东西，在那一项上快速点两下才算选中。接下来每一层都会先连着播三次。"
         ],
         hint: "点屏幕任意位置继续",
-        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，会播该项原本的名称信息。两根手指上下滑，也会播原本信息。做题忘记题目时，三指轻点重听。摸到要选的东西，快速点两下才算选中。请点屏幕任意位置继续。",
+        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，会播该项原本的名称信息。两根手指上翻或下翻，也会播原本信息。做题忘记题目时，三指轻点重听。摸到要选的东西，快速点两下才算选中。请点屏幕任意位置继续。",
         next: tutAdvance
       });
     },
