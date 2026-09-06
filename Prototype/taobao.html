@@ -532,8 +532,8 @@
 })();
 
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
-const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.28;
-const LOUD = [1, 1.15, 1.35, 1.6, 1.9, 2.25];
+const DUR = 0.22, ATT = 0.035, REL = 0.05, DLY = 0.28;
+const LOUD = [1, 1.1, 1.25, 1.4, 1.55, 1.7];
 const SPEECH_RATE = 4, SPEECH_VOL = 0.42, GUIDE_RATE = 2;
 const page = document.getElementById("page");
 const tabs = document.getElementById("tabs");
@@ -557,7 +557,7 @@ icons.addEventListener("scroll", function () {
   });
 });
 
-let ctx = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
+let ctx = null, masterGain = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
 let sessionMeta = { participant_id: "", vision: "", sr_exp: "" };
 let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null, tryStarted = 0, panTravel = 0, adaptTimer = 0;
 let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null, lastProductKey = "", lastPanAnnounceKey = "", lastPanAnnounceAt = 0;
@@ -614,9 +614,17 @@ function levelIndex(lv) {
 }
 function ensureAudio() {
   if (navigator.audioSession) { try { navigator.audioSession.type = "playback"; } catch (err) {} }
-  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = ctx.createGain();
+    masterGain.gain.value = 0.8;
+    masterGain.connect(ctx.destination);
+  }
   if (ctx.state === "suspended") ctx.resume();
   return ctx;
+}
+function audioOut() {
+  return masterGain || ctx.destination;
 }
 function stopTones() {
   if (!ctx) { liveOsc = []; return; }
@@ -624,57 +632,58 @@ function stopTones() {
   liveOsc.forEach(function (o) {
     try {
       if (o._gain) {
+        const cur = Math.max(o._gain.gain.value, 0.0001);
         o._gain.gain.cancelScheduledValues(t);
-        o._gain.gain.setValueAtTime(Math.max(o._gain.gain.value, 0.0001), t);
-        o._gain.gain.linearRampToValueAtTime(0, t + 0.05);
+        o._gain.gain.setValueAtTime(cur, t);
+        o._gain.gain.linearRampToValueAtTime(0.0001, t + 0.03);
       }
-      o.stop(t + 0.06);
+      o.stop(t + 0.04);
     } catch (err) {}
   });
   liveOsc = [];
 }
 function playTone(lv) {
+  // 纯正弦 + 缓起缓落，避免起音爆音/刺啦
   const c = ensureAudio(); if (!c) return;
   if (c.state === "suspended") c.resume();
   stopTones();
   const i = levelIndex(lv);
-  const f = F[i] || 523.25, t0 = c.currentTime, g0 = 0.32 * (LOUD[i] || 1);
-  [[1, 1], [2, 0.22], [3, 0.1], [4, 0.05]].forEach(function (h) {
-    const o = c.createOscillator(), g = c.createGain();
-    const amp = Math.min(0.7, g0 * h[1]);
-    o.type = "sine";
-    o.frequency.setValueAtTime(f * h[0], t0);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(amp, t0 + ATT);
-    g.gain.setValueAtTime(amp, t0 + DUR - REL);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + DUR);
-    o.connect(g); g.connect(c.destination);
-    o._gain = g;
-    o.start(t0); o.stop(t0 + DUR + 0.02);
-    liveOsc.push(o);
-  });
+  const f = F[i] || 523.25;
+  const t0 = c.currentTime + 0.018;
+  const amp = Math.min(0.38, 0.22 * (LOUD[i] || 1));
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = "sine";
+  o.frequency.setValueAtTime(f, t0);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(amp, t0 + ATT);
+  g.gain.linearRampToValueAtTime(amp * 0.92, t0 + DUR - REL);
+  g.gain.linearRampToValueAtTime(0.0001, t0 + DUR);
+  o.connect(g); g.connect(audioOut());
+  o._gain = g;
+  o.start(t0); o.stop(t0 + DUR + 0.03);
+  liveOsc.push(o);
 }
 function playEarcon(kind) {
-  // 对齐读屏耳标：离开 / 边缘 / 轴向提示，短促可辨
+  // 柔和正弦短提示，避免方波「刺啦」叠在音高前
   try {
     const c = ensureAudio(); if (!c) return;
-    const t0 = c.currentTime;
+    const t0 = c.currentTime + 0.01;
     const o = c.createOscillator(), g = c.createGain();
-    o.type = "square";
+    o.type = "sine";
     const map = {
-      leave: [180, 0.07, 0.12],
-      edge: [720, 0.05, 0.1],
-      hpan: [440, 0.04, 0.08],
-      vpan: [330, 0.04, 0.08],
-      step: [520, 0.035, 0.07]
+      leave: [210, 0.08, 0.06],
+      edge: [640, 0.06, 0.05],
+      hpan: [420, 0.05, 0.04],
+      vpan: [310, 0.05, 0.04],
+      step: [500, 0.045, 0.035]
     };
     const cfg = map[kind] || map.step;
     o.frequency.setValueAtTime(cfg[0], t0);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.linearRampToValueAtTime(cfg[2], t0 + 0.008);
+    g.gain.linearRampToValueAtTime(cfg[2], t0 + 0.012);
     g.gain.linearRampToValueAtTime(0.0001, t0 + cfg[1]);
-    o.connect(g); g.connect(c.destination);
-    o.start(t0); o.stop(t0 + cfg[1] + 0.02);
+    o.connect(g); g.connect(audioOut());
+    o.start(t0); o.stop(t0 + cfg[1] + 0.03);
   } catch (err) {}
 }
 function speakCue(txt) {
@@ -843,11 +852,14 @@ function announceNode(cell, opts) {
   const ctx = productContext(cell);
   if (ctx) lastProductKey = ctx.key;
   else lastProductKey = "";
-  if (regionChanged) {
-    playEarcon(reg.id === "tabs" || reg.id === "icons" || reg.id === "seckill" ? "hpan" : "vpan");
-  }
-  if (opts.step) playEarcon("step");
   const say = cell.dataset.sp || "";
+  // 有音高时不再叠区域/步进耳标，避免音高前「刺啦」
+  if (!pitchOn) {
+    if (regionChanged) {
+      playEarcon(reg.id === "tabs" || reg.id === "icons" || reg.id === "seckill" ? "hpan" : "vpan");
+    }
+    if (opts.step) playEarcon("step");
+  }
   if (!say) return;
   if (pitchOn) {
     playTone(levelIndex(cell.dataset.lv));
