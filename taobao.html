@@ -266,6 +266,16 @@
   }
   #guide.ghost > * { display: none; }
   #taskbar { display: none !important; }
+  #recall {
+    display: none; position: absolute; left: 10px; right: 10px; z-index: 7;
+    top: calc(8px + env(safe-area-inset-top));
+    appearance: none; border: 0; border-radius: 14px;
+    padding: 12px 14px; background: rgba(17,17,17,.88); color: #fff;
+    font: 700 16px/1.35 -apple-system, "PingFang SC", sans-serif;
+    text-align: center; touch-action: manipulation;
+  }
+  #recall.show { display: block; }
+  #recall small { display: block; margin-top: 4px; font-size: 13px; font-weight: 500; opacity: .7; }
   #guide.form {
     justify-content: flex-start;
     touch-action: auto;
@@ -459,6 +469,7 @@
   <div class="sim-el nav" data-lv="0" data-sp="我的淘宝，按钮"><div class="n">😊</div>我的淘宝</div>
 </div>
 <div id="taskbar"></div>
+<button type="button" id="recall" aria-label="重听本题">重听本题<small>或三指轻点屏幕</small></button>
 <div id="hit"></div>
 <div id="guide"></div>
 <button type="button" id="gate">点击屏幕开始<small>请先戴上耳机</small><span class="sub">先听使用说明，再做查找任务</span></button>
@@ -532,6 +543,7 @@ const hit = document.getElementById("hit");
 const gate = document.getElementById("gate");
 const guide = document.getElementById("guide");
 const taskbar = document.getElementById("taskbar");
+const recallBtn = document.getElementById("recall");
 const TRIAL_MS = 90000;
 const ADAPT_MIN_MS = 22000;
 const ADAPT_MIN_ITEMS = 6;
@@ -548,7 +560,7 @@ icons.addEventListener("scroll", function () {
 let ctx = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
 let sessionMeta = { participant_id: "", vision: "", sr_exp: "" };
 let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null, tryStarted = 0, panTravel = 0, adaptTimer = 0;
-let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null;
+let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null, lastProductKey = "";
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -718,23 +730,106 @@ function focusables() {
     return r.width >= 8 && r.height >= 8 && r.bottom > 8 && r.top < window.innerHeight - 8 && r.right > 8 && r.left < window.innerWidth - 8;
   });
 }
+function productContext(el) {
+  if (!el || !el.closest) return null;
+  const sk = el.closest(".sk-item");
+  if (sk) {
+    const row = document.getElementById("seckill");
+    const items = row ? Array.prototype.slice.call(row.querySelectorAll(".sk-item")) : [];
+    const i = items.indexOf(sk) + 1;
+    return { key: "sk-" + (sk.dataset.id || i), region: "限时秒杀", index: i, total: items.length, product: sk.dataset.sp || "", host: sk };
+  }
+  const card = el.closest(".card");
+  if (card) {
+    const feed = document.getElementById("feed");
+    const cards = feed ? Array.prototype.slice.call(feed.querySelectorAll(":scope > .card")) : [];
+    const i = cards.indexOf(card) + 1;
+    return { key: "card-" + (card.dataset.id || i), region: "商品列表", index: i, total: cards.length, product: card.dataset.sp || "", host: card };
+  }
+  const pcol = el.closest(".pcol");
+  if (pcol) {
+    const promo = pcol.parentElement;
+    const cols = promo ? Array.prototype.slice.call(promo.querySelectorAll(":scope > .pcol")) : [];
+    const i = cols.indexOf(pcol) + 1;
+    const title = pcol.querySelector(".pt");
+    return { key: "promo-" + i, region: "活动区", index: i, total: cols.length, product: (title && title.dataset.sp) || pcol.dataset.sp || "", host: pcol };
+  }
+  return null;
+}
+function locatePhrase(cell, opts) {
+  opts = opts || {};
+  const reg = regionOf(cell);
+  const ctx = productContext(cell);
+  const parts = [];
+  const regionChanged = opts.forceRegion || (reg.id && reg.id !== lastRegion);
+  const productChanged = !!(ctx && ctx.key !== lastProductKey);
+  if (regionChanged) {
+    parts.push(reg.name);
+    if (reg.hint) parts.push(reg.hint);
+  }
+  if (ctx) {
+    if (regionChanged || productChanged || opts.forceRegion || opts.step) {
+      if (ctx.index > 0) {
+        parts.push(ctx.total > 0 ? ("第" + ctx.index + "件，共" + ctx.total + "件") : ("第" + ctx.index + "件"));
+      }
+      if (ctx.product) parts.push(ctx.product);
+    }
+    if (ctx.host !== cell) {
+      const part = cell.dataset.sp || "";
+      if (part && part !== ctx.product) parts.push("现在在" + part);
+    } else if (!(regionChanged || productChanged || opts.forceRegion || opts.step)) {
+      if (ctx.product) parts.push(ctx.product);
+    }
+  } else {
+    parts.push(cell.dataset.sp || "");
+  }
+  if (!parts.length) parts.push(cell.dataset.sp || "未知位置");
+  return { say: parts.join("。"), reg: reg, ctx: ctx, regionChanged: regionChanged };
+}
 function announceNode(cell, opts) {
   opts = opts || {};
   if (!cell) return;
-  const reg = regionOf(cell);
-  let say = cell.dataset.sp || "";
-  if (opts.forceRegion || (reg.id && reg.id !== lastRegion)) {
-    lastRegion = reg.id;
-    say = reg.name + "。" + say + (reg.hint ? "。" + reg.hint : "");
-    playEarcon(reg.id === "tabs" || reg.id === "icons" || reg.id === "seckill" ? "hpan" : "vpan");
+  const loc = locatePhrase(cell, opts);
+  lastRegion = loc.reg.id || lastRegion;
+  if (loc.ctx) lastProductKey = loc.ctx.key;
+  else lastProductKey = "";
+  if (loc.regionChanged) {
+    playEarcon(loc.reg.id === "tabs" || loc.reg.id === "icons" || loc.reg.id === "seckill" ? "hpan" : "vpan");
   }
   if (opts.step) playEarcon("step");
+  const say = loc.say;
   if (pitchOn) {
     playTone(levelIndex(cell.dataset.lv));
     setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, (DUR + DLY) * 1000);
   } else {
     setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, 80);
   }
+}
+function setRecallVisible(on) {
+  if (!recallBtn) return;
+  recallBtn.classList.toggle("show", !!on);
+}
+function repeatTrialPrompt() {
+  if (tryMode) {
+    playEarcon("step");
+    speakCue("这就是重听题目的手势。正式做题时，三指轻点会再把题目慢慢说一遍。");
+    return;
+  }
+  if (!trial || trial.phase) {
+    speakCue("现在没有进行中的题目");
+    return;
+  }
+  if (!ready) {
+    speakCue("题目还没开始");
+    return;
+  }
+  speechSynthesis.cancel();
+  stopTones();
+  playEarcon("step");
+  const kind = trial.practice ? "练习题" : "本题";
+  const say = kind + "。" + (trial.title || "") + "。" + (trial.say || "") + "。找到以后，在那一项上快速点两下。若再忘记，三指轻点屏幕，或点顶部重听本题。";
+  speak(say, GUIDE_RATE);
+  if (session) session.events.push({ t: Date.now() - session.t0, type: "repeat_prompt" });
 }
 function focusElement(cell, opts) {
   if (!cell || !ready) return;
@@ -782,6 +877,7 @@ function leaveFence() {
   lastId = null;
   lastFocusEl = null;
   lastRegion = "";
+  lastProductKey = "";
   document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
   speechSynthesis.cancel();
   const now = Date.now();
@@ -821,6 +917,12 @@ function axisForY(y) {
 function onTouchStart(e) {
   e.preventDefault();
   if (!ready) return;
+  if (e.touches.length >= 3) {
+    pan = null;
+    gesture = { mode: "tri", t: Date.now(), x: midpoint(e.touches).x, y: midpoint(e.touches).y };
+    speechSynthesis.cancel();
+    return;
+  }
   if (e.touches.length >= 2) {
     pan = midpoint(e.touches);
     panAxis = axisForY(pan.y);
@@ -852,6 +954,8 @@ function onTouchStart(e) {
 function onTouchMove(e) {
   e.preventDefault();
   if (!ready) return;
+  if (gesture && gesture.mode === "tri") return;
+  if (e.touches.length >= 3) return;
   if (e.touches.length >= 2) {
     const p = midpoint(e.touches);
     if (pan) {
@@ -895,7 +999,19 @@ function onTouchMove(e) {
 function onTouchEnd(e) {
   e.preventDefault();
   if (e.touches.length < 2) pan = null;
-  if (!ready || !gesture || e.touches.length >= 1) { gesture = null; return; }
+  if (!ready) { gesture = null; return; }
+  if (gesture && gesture.mode === "tri") {
+    if (e.touches.length === 0) {
+      const dt = Date.now() - gesture.t;
+      gesture = null;
+      if (dt < 800) repeatTrialPrompt();
+    }
+    return;
+  }
+  if (!gesture || e.touches.length >= 1) {
+    if (e.touches.length === 0) gesture = null;
+    return;
+  }
   const t = e.changedTouches[0];
   const dx = (t ? t.clientX : gesture.lx) - gesture.x;
   const dy = (t ? t.clientY : gesture.ly) - gesture.y;
@@ -1005,6 +1121,7 @@ function highlightDemo(sel) {
 }
 function showGuide(opt) {
   hit.style.display = "none";
+  setRecallVisible(false);
   taskbar.classList.remove("show");
   tryMode = "";
   ready = false;
@@ -1067,6 +1184,18 @@ function bindHit() {
   hit.addEventListener("touchcancel", onTouchEnd, { passive: false });
   hit.addEventListener("mousemove", function (e) { if (armed && ready) explore(e); });
 }
+if (recallBtn) {
+  recallBtn.addEventListener("click", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    repeatTrialPrompt();
+  });
+  recallBtn.addEventListener("touchend", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    repeatTrialPrompt();
+  }, { passive: false });
+}
 function onActivate(cur) {
   speechSynthesis.cancel();
   if (tryMode === "activate") {
@@ -1075,12 +1204,14 @@ function onActivate(cur) {
   }
   if (tryMode === "explore" || tryMode === "adapt" || tryMode === "pan") {
     if (pitchOn && cur) playTone(levelIndex(cur.dataset.lv));
-    speak("选中，" + (cur ? cur.dataset.sp : ""), GUIDE_RATE);
+    const where = cur ? locatePhrase(cur, { forceRegion: true }).say : "";
+    speak("选中。" + where, GUIDE_RATE);
     return;
   }
   if (!trial) {
     if (pitchOn) playTone(cur ? levelIndex(cur.dataset.lv) : 0);
-    setTimeout(function () { speak("选中，" + (cur ? cur.dataset.sp : "")); }, pitchOn ? (DUR + DLY) * 1000 : 80);
+    const where = cur ? locatePhrase(cur, { forceRegion: true }).say : "";
+    setTimeout(function () { speak("选中。" + where); }, pitchOn ? (DUR + DLY) * 1000 : 80);
     return;
   }
   const tid = focusTid(cur);
@@ -1091,7 +1222,8 @@ function onActivate(cur) {
   }
   trial.n_errors += 1;
   if (pitchOn && cur) playTone(levelIndex(cur.dataset.lv));
-  speak("不对，请继续找", GUIDE_RATE);
+  const where = cur ? locatePhrase(cur, { forceRegion: true }).say : "未知位置";
+  speak("不对，这里是" + where + "。请继续找。三指轻点可重听题目。", GUIDE_RATE);
 }
 function isoNow(ms) {
   return new Date(ms || Date.now()).toISOString();
@@ -1132,6 +1264,8 @@ function finishTrial(result) {
   persistSession();
   ready = false;
   lastId = null;
+  lastProductKey = "";
+  setRecallVisible(false);
   trial = null;
   taskbar.classList.remove("show");
   if (result === "success") speak("正确", GUIDE_RATE);
@@ -1147,9 +1281,13 @@ function announceTrial() {
   showGuide({
     kicker: kind,
     title: trial.title,
-    body: [condTxt, trial.say, "单指慢滑摸内容；单指左右轻扫切上一项下一项；双指翻页。找到以后快速点两下。"],
+    body: [
+      condTxt,
+      trial.say,
+      "单指慢滑会报你在哪一块、第几件商品。忘记题目时：三指轻点屏幕，或点顶部「重听本题」。找到以后快速点两下。"
+    ],
     hint: "点屏幕任意位置开始本题",
-    say: kind + "。" + condTxt + trial.say + "单指慢滑摸内容，左右轻扫切换项目，双指翻页。找到以后快速点两下。",
+    say: kind + "。" + condTxt + trial.say + "单指慢滑会告诉你在哪一块、第几件商品。忘记题目就三指轻点，或点顶部重听本题。找到以后快速点两下。",
     next: startTrial
   });
 }
@@ -1168,8 +1306,14 @@ function startTrial() {
   taskbar.classList.remove("show");
   bindHit();
   ready = true;
+  setRecallVisible(true);
   clearTimeout(trialTimer);
   trialTimer = setTimeout(function () { finishTrial("timeout"); }, TRIAL_MS);
+  setTimeout(function () {
+    if (ready && trial && !trial.phase) {
+      speak("开始。" + (trial.say || "") + "。三指轻点可重听题目。", GUIDE_RATE);
+    }
+  }, 350);
 }
 function beginTry(mode, pitch, then, prompt) {
   hideGuide();
@@ -1492,13 +1636,14 @@ function runTut() {
         title: "这是实验用的淘宝首页",
         body: [
           "不是真的购物。请戴上耳机。",
-          "一根手指慢慢滑：摸到哪里就读哪里，换到新区域会先报区域名，并提示这里是左右翻还是上下翻。",
+          "一根手指慢慢滑：会报你在哪一块、第几件商品、商品名称；摸到价钱或图片会说「现在在……」。",
           "一根手指左右轻扫：像手机读屏一样，切到上一项或下一项。",
           "两根手指一起滑：频道、快捷入口、秒杀是左右翻；商品列表是上下翻。翻到头会提示。滑出内容会说已离开。",
+          "做题时若忘记题目：三指轻点屏幕，或点顶部「重听本题」。",
           "摸到要选的东西，在那一项上快速点两下才算选中。接下来每一层都会先连着播三次。"
         ],
         hint: "点屏幕任意位置继续",
-        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，摸到哪里就读哪里，换到新区域会先报区域名，并提示这里是左右翻还是上下翻。一根手指左右轻扫，像手机读屏一样，切到上一项或下一项。两根手指一起滑，频道、快捷入口、秒杀是左右翻，商品列表是上下翻，翻到头会提示。滑出内容会说已离开。摸到要选的东西，快速点两下才算选中。接下来每一层都会先连着播三次。请点屏幕任意位置继续。",
+        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，会报你在哪一块、第几件商品和商品名称。一根手指左右轻扫，切换上一项下一项。两根手指翻页，到头会提示。做题忘记题目时，三指轻点屏幕，或点顶部重听本题。摸到要选的东西，快速点两下才算选中。请点屏幕任意位置继续。",
         next: tutAdvance
       });
     },
@@ -1592,7 +1737,7 @@ function runTut() {
         ghost: 1,
         say: "请用一根手指慢慢滑。点屏幕开始滑。",
         next: function () {
-          beginTry("explore", true, nextTut, "请用一根手指在屏幕上慢慢滑。摸到哪里会先出高低音，再读名称。换到新区域会报区域名，并提示左右翻还是上下翻。滑过三个不同的地方，就会自动继续。");
+          beginTry("explore", true, nextTut, "请用一根手指在屏幕上慢慢滑。摸到商品时，会报第几件和商品名称。滑过三个不同的地方，就会自动继续。");
         }
       });
     },
@@ -1601,16 +1746,16 @@ function runTut() {
         ghost: 1,
         say: "接下来试选中。摸到以后要快速点两下。点屏幕开始试。",
         next: function () {
-          beginTry("activate", true, nextTut, "请把手指停在任意一项上，快速点两下。这表示选中。点对了会说话告诉你。");
+          beginTry("activate", true, nextTut, "请把手指停在任意一项上，快速点两下。这表示选中。点对了会告诉你选中了哪里。");
         }
       });
     },
     function () {
       showGuide({
         ghost: 1,
-        say: "接下来试两种滑动。点屏幕开始试。",
+        say: "接下来试翻页和重听。点屏幕开始试。",
         next: function () {
-          beginTry("pan", true, nextTut, "请先试两根手指：在秒杀条上左右滑，或在页面上下滑。开始翻时会报左右翻还是上下翻，到头会提示。也可以单指左右轻扫切换上一项下一项。");
+          beginTry("pan", true, nextTut, "请先试两根手指翻页。也可以三指轻点练习：正式做题时，三指轻点可重听题目。翻一段就会继续。");
         }
       });
     }
