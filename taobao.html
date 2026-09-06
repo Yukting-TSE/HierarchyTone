@@ -21,6 +21,7 @@
     bottom: calc(52px + 44px + env(safe-area-inset-bottom));
     overflow-x: hidden; overflow-y: auto;
     touch-action: none; background: #f3f3f3;
+    z-index: 1;
   }
   .sim-el { position: relative; outline: 3px solid transparent; outline-offset: -2px; }
   .sim-el.on { outline-color: #ff5000; z-index: 1; }
@@ -252,6 +253,17 @@
     font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   }
   #guide.show { display: flex; flex-direction: column; justify-content: center; }
+  /* 介绍全屏时压住 sticky 顶栏，避免导航栏冒出来挡字 */
+  body.guide-blocking .head {
+    z-index: 1 !important;
+    -webkit-transform: none !important;
+    transform: none !important;
+    isolation: auto !important;
+  }
+  body.guide-blocking #coupon,
+  body.guide-blocking #tabbar {
+    z-index: 1 !important;
+  }
   #guide .k { font-size: 16px; letter-spacing: .08em; opacity: .55; margin-bottom: 10px; font-weight: 600; }
   #guide h2 { font-size: 32px; line-height: 1.35; margin: 0 0 16px; font-weight: 800; }
   #guide p { font-size: 22px; line-height: 1.6; margin: 0 0 14px; font-weight: 500; opacity: .95; }
@@ -1411,6 +1423,7 @@ function hideGuide() {
   guide.onclick = null;
   guide.ontouchend = null;
   guideHandler = null;
+  document.body.classList.remove("guide-blocking");
 }
 function clearDemo() {
   document.querySelectorAll(".sim-el.demo, .sim-el.on").forEach(function (el) {
@@ -1438,7 +1451,9 @@ function showGuide(opt) {
   if (opt.ghost) {
     guide.classList.add("ghost");
     guide.innerHTML = "";
+    document.body.classList.remove("guide-blocking");
   } else {
+    document.body.classList.add("guide-blocking");
     var html = "";
     if (opt.kicker) html += '<div class="k">' + opt.kicker + "</div>";
     if (opt.title) html += "<h2>" + opt.title + "</h2>";
