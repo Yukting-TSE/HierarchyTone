@@ -560,7 +560,7 @@ icons.addEventListener("scroll", function () {
 let ctx = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
 let sessionMeta = { participant_id: "", vision: "", sr_exp: "" };
 let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null, tryStarted = 0, panTravel = 0, adaptTimer = 0;
-let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null, lastProductKey = "";
+let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null, lastProductKey = "", lastPanAnnounceKey = "", lastPanAnnounceAt = 0;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -730,61 +730,111 @@ function focusables() {
     return r.width >= 8 && r.height >= 8 && r.bottom > 8 && r.top < window.innerHeight - 8 && r.right > 8 && r.left < window.innerWidth - 8;
   });
 }
+function shortProductName(sp) {
+  if (!sp) return "";
+  return String(sp).split("，")[0] || String(sp);
+}
 function productContext(el) {
   if (!el || !el.closest) return null;
   const sk = el.closest(".sk-item");
   if (sk) {
-    const row = document.getElementById("seckill");
-    const items = row ? Array.prototype.slice.call(row.querySelectorAll(".sk-item")) : [];
-    const i = items.indexOf(sk) + 1;
-    return { key: "sk-" + (sk.dataset.id || i), region: "限时秒杀", index: i, total: items.length, product: sk.dataset.sp || "", host: sk };
+    return { key: "sk-" + (sk.dataset.id || sk.dataset.sp || ""), region: "限时秒杀", product: sk.dataset.sp || "", host: sk };
   }
   const card = el.closest(".card");
   if (card) {
-    const feed = document.getElementById("feed");
-    const cards = feed ? Array.prototype.slice.call(feed.querySelectorAll(":scope > .card")) : [];
-    const i = cards.indexOf(card) + 1;
-    return { key: "card-" + (card.dataset.id || i), region: "商品列表", index: i, total: cards.length, product: card.dataset.sp || "", host: card };
+    return { key: "card-" + (card.dataset.id || card.dataset.sp || ""), region: "商品列表", product: card.dataset.sp || "", host: card };
   }
   const pcol = el.closest(".pcol");
   if (pcol) {
-    const promo = pcol.parentElement;
-    const cols = promo ? Array.prototype.slice.call(promo.querySelectorAll(":scope > .pcol")) : [];
-    const i = cols.indexOf(pcol) + 1;
     const title = pcol.querySelector(".pt");
-    return { key: "promo-" + i, region: "活动区", index: i, total: cols.length, product: (title && title.dataset.sp) || pcol.dataset.sp || "", host: pcol };
+    const name = (title && title.dataset.sp) || pcol.dataset.sp || "";
+    return { key: "promo-" + name, region: "活动区", product: name, host: pcol };
   }
   return null;
 }
 function locatePhrase(cell, opts) {
+  // 单指触探：报板块 + 商品名（不报第几件）；子控件补「现在在…」
   opts = opts || {};
   const reg = regionOf(cell);
   const ctx = productContext(cell);
   const parts = [];
   const regionChanged = opts.forceRegion || (reg.id && reg.id !== lastRegion);
   const productChanged = !!(ctx && ctx.key !== lastProductKey);
-  if (regionChanged) {
-    parts.push(reg.name);
-    if (reg.hint) parts.push(reg.hint);
-  }
+  if (regionChanged) parts.push(reg.name);
   if (ctx) {
     if (regionChanged || productChanged || opts.forceRegion || opts.step) {
-      if (ctx.index > 0) {
-        parts.push(ctx.total > 0 ? ("第" + ctx.index + "件，共" + ctx.total + "件") : ("第" + ctx.index + "件"));
-      }
-      if (ctx.product) parts.push(ctx.product);
+      parts.push(shortProductName(ctx.product) || ctx.product);
     }
     if (ctx.host !== cell) {
       const part = cell.dataset.sp || "";
-      if (part && part !== ctx.product) parts.push("现在在" + part);
-    } else if (!(regionChanged || productChanged || opts.forceRegion || opts.step)) {
-      if (ctx.product) parts.push(ctx.product);
+      if (part && part !== ctx.product && part !== shortProductName(ctx.product)) {
+        parts.push("现在在" + shortProductName(part));
+      }
     }
   } else {
     parts.push(cell.dataset.sp || "");
   }
   if (!parts.length) parts.push(cell.dataset.sp || "未知位置");
   return { say: parts.join("。"), reg: reg, ctx: ctx, regionChanged: regionChanged };
+}
+function panContentAtViewport() {
+  // 双指翻动后：根据视口中央附近的内容，报「板块 + 商品」
+  if (panAxis === "seckill" && seckill) {
+    const rr = seckill.getBoundingClientRect();
+    const mid = (rr.left + rr.right) / 2;
+    let best = null, bestDist = 1e9;
+    Array.prototype.forEach.call(seckill.querySelectorAll(".sk-item"), function (sk) {
+      const r = sk.getBoundingClientRect();
+      if (r.right < rr.left || r.left > rr.right) return;
+      const d = Math.abs((r.left + r.right) / 2 - mid);
+      if (d < bestDist) { bestDist = d; best = sk; }
+    });
+    if (!best) return null;
+    return { key: "pan-sk-" + (best.dataset.id || best.dataset.sp || ""), say: "限时秒杀。" + shortProductName(best.dataset.sp) };
+  }
+  if (panAxis === "tabs" && tabs) {
+    const rr = tabs.getBoundingClientRect();
+    const mid = (rr.left + rr.right) / 2;
+    let best = null, bestDist = 1e9;
+    Array.prototype.forEach.call(tabs.querySelectorAll(".tab"), function (tab) {
+      const r = tab.getBoundingClientRect();
+      const d = Math.abs((r.left + r.right) / 2 - mid);
+      if (d < bestDist) { bestDist = d; best = tab; }
+    });
+    if (!best) return null;
+    return { key: "pan-tab-" + (best.dataset.id || best.dataset.sp || ""), say: "频道栏。" + shortProductName(best.dataset.sp) };
+  }
+  if (panAxis === "icons" && icons) {
+    const pageIdx = Math.round(icons.scrollLeft / Math.max(1, icons.clientWidth)) + 1;
+    return { key: "pan-icons-" + pageIdx, say: "快捷入口。第" + pageIdx + "页" };
+  }
+  // 默认：页面上下翻，取视口约 1/3 高度处内容
+  const x = Math.round(window.innerWidth * 0.5);
+  const y = Math.round(window.innerHeight * 0.34);
+  hit.style.pointerEvents = "none";
+  const raw = document.elementFromPoint(x, y);
+  hit.style.pointerEvents = "auto";
+  const cell = raw && raw.closest ? raw.closest(".sim-el") : null;
+  if (!cell) return null;
+  const ctx = productContext(cell);
+  const reg = regionOf(cell);
+  if (ctx) {
+    return { key: "pan-" + ctx.key, say: ctx.region + "。" + shortProductName(ctx.product) };
+  }
+  return { key: "pan-" + reg.id + "-" + (cell.dataset.id || ""), say: reg.name + "。" + shortProductName(cell.dataset.sp) };
+}
+function maybeAnnouncePanContent() {
+  const now = Date.now();
+  if (now - lastPanAnnounceAt < 650) return;
+  const info = panContentAtViewport();
+  if (!info || !info.say) return;
+  if (info.key === lastPanAnnounceKey) return;
+  lastPanAnnounceKey = info.key;
+  lastPanAnnounceAt = now;
+  speakCue(info.say);
+  if (session && trial && !trial.phase) {
+    session.events.push({ t: Date.now() - session.t0, type: "pan_locate", axis: panAxis, say: info.say });
+  }
 }
 function announceNode(cell, opts) {
   opts = opts || {};
@@ -971,6 +1021,9 @@ function onTouchMove(e) {
       if (Math.abs(after - before) < 0.5) {
         const edge = scrollEdge(el, meta.dir);
         if (edge) announceEdge(edge);
+      } else if (Math.abs(after - before) >= 2) {
+        // 双指翻动：报当前板块下的商品/内容（尤其上下翻页面）
+        maybeAnnouncePanContent();
       }
       if (tryMode === "pan") {
         panTravel += Math.abs(dx) + Math.abs(dy);
@@ -1284,10 +1337,10 @@ function announceTrial() {
     body: [
       condTxt,
       trial.say,
-      "单指慢滑会报你在哪一块、第几件商品。忘记题目时：三指轻点屏幕，或点顶部「重听本题」。找到以后快速点两下。"
+      "单指慢滑会报板块和商品名。双指上下翻时，会报当前板块下的那个商品。忘记题目：三指轻点或点顶部重听本题。找到以后快速点两下。"
     ],
     hint: "点屏幕任意位置开始本题",
-    say: kind + "。" + condTxt + trial.say + "单指慢滑会告诉你在哪一块、第几件商品。忘记题目就三指轻点，或点顶部重听本题。找到以后快速点两下。",
+    say: kind + "。" + condTxt + trial.say + "单指慢滑报板块和商品名。双指上下翻会报当前板块下的商品。忘记题目就三指轻点重听。找到以后快速点两下。",
     next: startTrial
   });
 }
@@ -1636,14 +1689,14 @@ function runTut() {
         title: "这是实验用的淘宝首页",
         body: [
           "不是真的购物。请戴上耳机。",
-          "一根手指慢慢滑：会报你在哪一块、第几件商品、商品名称；摸到价钱或图片会说「现在在……」。",
+          "一根手指慢慢滑：报板块和商品名；摸到价钱或图片会说「现在在……」。",
           "一根手指左右轻扫：像手机读屏一样，切到上一项或下一项。",
-          "两根手指一起滑：频道、快捷入口、秒杀是左右翻；商品列表是上下翻。翻到头会提示。滑出内容会说已离开。",
+          "两根手指上下滑：会报当前板块下的那个商品；左右滑用于频道、秒杀等横条。翻到头会提示。",
           "做题时若忘记题目：三指轻点屏幕，或点顶部「重听本题」。",
           "摸到要选的东西，在那一项上快速点两下才算选中。接下来每一层都会先连着播三次。"
         ],
         hint: "点屏幕任意位置继续",
-        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，会报你在哪一块、第几件商品和商品名称。一根手指左右轻扫，切换上一项下一项。两根手指翻页，到头会提示。做题忘记题目时，三指轻点屏幕，或点顶部重听本题。摸到要选的东西，快速点两下才算选中。请点屏幕任意位置继续。",
+        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，报板块和商品名。两根手指上下滑，会报当前板块下的那个商品。做题忘记题目时，三指轻点重听。摸到要选的东西，快速点两下才算选中。请点屏幕任意位置继续。",
         next: tutAdvance
       });
     },
@@ -1737,7 +1790,7 @@ function runTut() {
         ghost: 1,
         say: "请用一根手指慢慢滑。点屏幕开始滑。",
         next: function () {
-          beginTry("explore", true, nextTut, "请用一根手指在屏幕上慢慢滑。摸到商品时，会报第几件和商品名称。滑过三个不同的地方，就会自动继续。");
+          beginTry("explore", true, nextTut, "请用一根手指在屏幕上慢慢滑。摸到商品时，会报板块和商品名。滑过三个不同的地方，就会自动继续。");
         }
       });
     },
@@ -1753,9 +1806,9 @@ function runTut() {
     function () {
       showGuide({
         ghost: 1,
-        say: "接下来试翻页和重听。点屏幕开始试。",
+        say: "接下来试双指翻页。点屏幕开始试。",
         next: function () {
-          beginTry("pan", true, nextTut, "请先试两根手指翻页。也可以三指轻点练习：正式做题时，三指轻点可重听题目。翻一段就会继续。");
+          beginTry("pan", true, nextTut, "请用两根手指上下滑。翻动时会报当前板块下的那个商品。翻一段就会继续。");
         }
       });
     }
