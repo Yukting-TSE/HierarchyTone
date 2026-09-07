@@ -20,7 +20,7 @@
   }
   #page {
     position: absolute; left: 0; right: 0; top: 0;
-    bottom: calc(52px + 44px + env(safe-area-inset-bottom));
+    bottom: calc(96px + env(safe-area-inset-bottom));
     overflow-x: hidden; overflow-y: auto;
     touch-action: none; background: #f3f3f3;
     z-index: 1;
@@ -203,10 +203,11 @@
   }
 
   #coupon {
-    position: absolute; left: 0; right: 0; z-index: 4;
+    position: absolute; left: 0; right: 0; z-index: 5;
     bottom: calc(52px + env(safe-area-inset-bottom));
     height: 44px; background: #ff8fab;
     display: flex; align-items: center; padding: 0 8px 0 10px; gap: 8px;
+    box-sizing: border-box;
   }
   .c-ico {
     width: 22px; height: 22px; background: #e11d48; color: #fff;
@@ -221,9 +222,12 @@
   .c-x { color: #fff; font-size: 16px; padding: 4px; opacity: .85; }
 
   #tabbar {
-    position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
-    display: flex; background: #fff; border-top: 1px solid #eee;
-    padding: 4px 0 calc(6px + env(safe-area-inset-bottom));
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+    display: flex; align-items: center;
+    height: calc(52px + env(safe-area-inset-bottom));
+    box-sizing: border-box;
+    background: #fff; border-top: 1px solid #eee;
+    padding: 2px 0 env(safe-area-inset-bottom);
   }
   .nav { flex: 1; text-align: center; color: #666; font-size: 10px; }
   .nav .n { font-size: 22px; line-height: 1.15; position: relative; display: inline-block; }
@@ -543,9 +547,10 @@
 })();
 
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
-const DUR = 0.22, ATT = 0.035, REL = 0.05, DLY = 0.28;
-const LOUD = [1, 1.1, 1.25, 1.4, 1.55, 1.7];
-const SPEECH_RATE = 4, SPEECH_VOL = 0.28, GUIDE_RATE = 2;
+const DUR = 0.15, ATT = 0.012, REL = 0.03, DLY = 0.06;
+const LOUD = [1, 1, 1, 1.05, 1.1, 1.15];
+const SPEECH_RATE = 4, SPEECH_VOL = 0.55, GUIDE_RATE = 2;
+const TONE_AMP = 0.42;
 const HIT_RADIUS = 52;
 const ACTIVATE_SLACK_MS = 700;
 const page = document.getElementById("page");
@@ -573,7 +578,7 @@ icons.addEventListener("scroll", function () {
 let ctx = null, masterGain = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
 let sessionMeta = { participant_id: "", vision: "", sr_exp: "" };
 let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null, tryStarted = 0, panTravel = 0, adaptTimer = 0;
-let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null, lastProductKey = "", lastPanAnnounceKey = "", lastPanAnnounceAt = 0, activateTarget = null, activateAt = 0;
+let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null, lastProductKey = "", lastPanAnnounceKey = "", lastPanAnnounceAt = 0, lastPanDir = "", activateTarget = null, activateAt = 0;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -694,40 +699,37 @@ function playTone(lv) {
     stopTones();
     const i = levelIndex(lv);
     const f = F[i] || 523.25;
-    const t0 = c.currentTime + 0.003;
-    const g0 = Math.min(0.8, 0.5 * (LOUD[i] || 1));
-    [[1, 1], [2, 0.18]].forEach(function (h) {
-      const o = c.createOscillator(), g = c.createGain();
-      const amp = Math.min(0.8, g0 * h[1]);
-      o.type = "sine";
-      o.frequency.setValueAtTime(f * h[0], t0);
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.linearRampToValueAtTime(amp, t0 + 0.016);
-      g.gain.linearRampToValueAtTime(amp * 0.88, t0 + DUR - 0.035);
-      g.gain.linearRampToValueAtTime(0.0001, t0 + DUR);
-      o.connect(g);
-      g.connect(c.destination);
-      if (masterGain) {
-        try { g.connect(masterGain); } catch (err) {}
-      }
-      o._gain = g;
-      o.start(t0);
-      o.stop(t0 + DUR + 0.05);
-      liveOsc.push(o);
-    });
+    const t0 = c.currentTime + 0.002;
+    // 各层音量接近，避免时大时小；只直连 destination
+    const amp = Math.min(0.5, TONE_AMP * (LOUD[i] || 1));
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(f, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(amp, t0 + ATT);
+    g.gain.linearRampToValueAtTime(amp * 0.9, t0 + DUR - REL);
+    g.gain.linearRampToValueAtTime(0.0001, t0 + DUR);
+    o.connect(g);
+    g.connect(c.destination);
+    o._gain = g;
+    o.start(t0);
+    o.stop(t0 + DUR + 0.03);
+    liveOsc.push(o);
   });
 }
 function playEarcon(kind) {
+  // 仅语音条件（C0）不播滴滴耳标，避免干扰
+  if (!pitchOn) return;
   withAudio(function (c) {
     const t0 = c.currentTime + 0.002;
     const o = c.createOscillator(), g = c.createGain();
     o.type = "sine";
     const map = {
-      leave: [210, 0.08, 0.07],
-      edge: [640, 0.06, 0.06],
-      hpan: [420, 0.05, 0.05],
-      vpan: [310, 0.05, 0.05],
-      step: [500, 0.045, 0.045]
+      leave: [210, 0.07, 0.05],
+      edge: [640, 0.05, 0.045],
+      hpan: [420, 0.045, 0.04],
+      vpan: [310, 0.045, 0.04],
+      step: [500, 0.04, 0.035]
     };
     const cfg = map[kind] || map.step;
     o.frequency.setValueAtTime(cfg[0], t0);
@@ -1018,14 +1020,17 @@ function panContentAtViewport() {
 }
 function maybeAnnouncePanContent(force, dirLabel) {
   const now = Date.now();
-  if (!force && now - lastPanAnnounceAt < 420) return;
+  if (!force && now - lastPanAnnounceAt < 280) return;
   const info = panContentAtViewport();
   if (!info || !info.say) return;
-  const say = dirLabel ? (dirLabel + "。" + info.say) : info.say;
-  if (!force && say === lastPanAnnounceKey) return;
-  lastPanAnnounceKey = say;
+  const dir = dirLabel || "";
+  // 方向一变必报；同一方向同一项才跳过
+  if (!force && info.key === lastPanAnnounceKey && dir === lastPanDir) return;
+  lastPanAnnounceKey = info.key;
+  lastPanDir = dir;
   lastPanAnnounceAt = now;
   if (info.reg && info.reg.id) lastRegion = info.reg.id;
+  const say = dir ? (dir + "。" + info.say) : info.say;
   speakCue(say);
   if (info.cell) {
     document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
@@ -1035,7 +1040,7 @@ function maybeAnnouncePanContent(force, dirLabel) {
     rememberActivateTarget(info.cell);
   }
   if (session && trial && !trial.phase) {
-    session.events.push({ t: Date.now() - session.t0, type: "pan_locate", axis: panAxis, dir: dirLabel || "", say: say });
+    session.events.push({ t: Date.now() - session.t0, type: "pan_locate", axis: panAxis, dir: dir, say: say });
   }
 }
 function announceNode(cell, opts) {
@@ -1062,10 +1067,9 @@ function announceNode(cell, opts) {
   if (!say) return;
   if (pitchOn) {
     playTone(levelIndex(cell.dataset.lv));
-    // 等人声前先留出音高时间；AudioContext 若晚一点 resume，也多留余量
-    setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, (DUR + DLY + 0.12) * 1000);
+    setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, (DUR + DLY) * 1000);
   } else {
-    setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, 80);
+    setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, 60);
   }
 }
 function setRecallVisible(on) {
@@ -1233,17 +1237,19 @@ function onTouchStart(e) {
     panAxis = axisForY(pan.y);
     panAnnounced = false;
     lastPanAnnounceKey = "";
+    lastPanDir = "";
     speechSynthesis.cancel();
     gesture = null;
     const meta = panMeta(panAxis);
     playEarcon(meta.dir === "h" ? "hpan" : "vpan");
-    // 起手先报当前位置；具体上翻/下翻/左翻/右翻在滑动后再报
+    // 起手只报位置；真正滑动后再报「上翻/下翻/左翻/右翻」
     const info = panContentAtViewport();
     const say = info && info.say ? info.say : meta.say;
     speakCue(say);
     if (info) {
       lastPanAnnounceKey = info.key;
       lastPanAnnounceAt = Date.now();
+      lastPanDir = "";
       if (info.reg && info.reg.id) lastRegion = info.reg.id;
       if (info.cell) {
         document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
@@ -1287,10 +1293,11 @@ function onTouchMove(e) {
       if (Math.abs(moved.after - moved.before) < 0.5) {
         const edge = scrollEdge(moved.el, moved.dir);
         if (edge) announceEdge(edge);
-      } else if (Math.abs(moved.after - moved.before) >= 2) {
+      } else if (Math.abs(moved.after - moved.before) >= 1) {
         if (moved.movedAxis === "page") panAxis = "page";
         else if (moved.movedAxis) panAxis = moved.movedAxis;
-        maybeAnnouncePanContent(false, panDirLabel(moved));
+        const dir = panDirLabel(moved) || panDirHint(moved.dir, dx, dy);
+        maybeAnnouncePanContent(false, dir);
       }
       if (tryMode === "pan") {
         panTravel += Math.abs(dx) + Math.abs(dy);
@@ -1585,6 +1592,21 @@ function persistSession() {
   if (!session) return;
   try { localStorage.setItem("ht-session", JSON.stringify(session)); } catch (err) {}
 }
+function countEvents(type) {
+  if (!session || !session.events || !trial || trial.t0 == null) return 0;
+  const t0 = trial.t0 - session.t0;
+  const t1 = Date.now() - session.t0;
+  let n = 0;
+  for (let i = 0; i < session.events.length; i++) {
+    const e = session.events[i];
+    if (e.type === type && e.t >= t0 && e.t <= t1) n += 1;
+  }
+  return n;
+}
+function uniqueLevelCount(levels) {
+  if (!levels) return 0;
+  return Object.keys(levels).length;
+}
 function snapshotTrial(result, endedAt, perfEnd) {
   const startedAt = trial.t0 || endedAt;
   const timeMs = trial.t0_perf != null ? Math.max(0, Math.round(perfEnd - trial.t0_perf)) : Math.max(0, endedAt - startedAt);
@@ -1605,6 +1627,11 @@ function snapshotTrial(result, endedAt, perfEnd) {
     time_ms: timeMs,
     n_focus: trial.n_focus || 0,
     n_errors: trial.n_errors || 0,
+    unique_levels: uniqueLevelCount(trial.levels),
+    n_leave: countEvents("leave"),
+    n_pan: countEvents("pan_start") + countEvents("pan_locate"),
+    n_step: countEvents("step"),
+    n_repeat: countEvents("repeat_prompt"),
     levels: trial.levels || {}
   };
 }
@@ -1625,9 +1652,14 @@ function finishTrial(result) {
   else if (result === "timeout") speak("时间到", GUIDE_RATE);
   setTimeout(function () { nextTrial(); }, result === "success" ? 900 : 1100);
 }
+function condSegmentLabel(cond) {
+  const order = (session && session.order) || "C0-C1";
+  if (order === "C1-C0") return cond === "C1" ? "第一段" : "第二段";
+  return cond === "C0" ? "第一段" : "第二段";
+}
 function announceTrial() {
   const c0 = trial.cond === "C0";
-  const kind = trial.practice ? "练习" : (c0 ? "第一段" : "第二段");
+  const kind = trial.practice ? "练习" : condSegmentLabel(trial.cond);
   const condTxt = c0
     ? "这一题只能听到语音，听不到高低音。"
     : "这一题会先听到一声高低音，再听到名称。";
@@ -1707,15 +1739,14 @@ function nextTrial() {
   trial = trials[trialIndex];
   if (trial.phase === "brief-c0") {
     showGuide({
-      kicker: "第一段实验",
+      kicker: condSegmentLabel("C0") + "实验",
       title: "查找任务，只有语音",
       body: [
-        "接下来开始做查找实验。实验分两段。",
-        "现在是第一段：只能听到语音，听不到高低音。",
+        "这一段只能听到语音，听不到高低音。",
         "请在页面上找指定的东西，找到以后快速点两下。"
       ],
       hint: "点屏幕任意位置继续",
-      say: "接下来开始做查找实验。实验分两段。现在是第一段，只能听到语音，听不到高低音。请在页面上找指定的东西，找到以后快速点两下。点屏幕继续。",
+      say: condSegmentLabel("C0") + "。只能听到语音，听不到高低音。请在页面上找指定的东西，找到以后快速点两下。点屏幕继续。",
       next: function () { nextTrial(); }
     });
     return;
@@ -1726,26 +1757,25 @@ function nextTrial() {
   }
   if (trial.phase === "break") {
     showGuide({
-      kicker: "第一段结束",
-      title: "只有语音的部分做完了",
-      body: ["刚才的查找题都只能听到语音，没有高低音。", "接下来第二段会加上高低音。先听一段说明，再适应一下。"],
+      kicker: "中间休息",
+      title: "换一种听法继续",
+      body: ["刚才那一段做完了。", "接下来换另一种听法再做查找题。"],
       hint: "点屏幕任意位置继续",
-      say: "第一段结束。刚才只能听到语音，听不到高低音。接下来第二段会加上高低音。点屏幕继续。",
+      say: "刚才那一段做完了。接下来换另一种听法再做查找题。点屏幕继续。",
       next: function () { nextTrial(); }
     });
     return;
   }
   if (trial.phase === "brief-c1") {
     showGuide({
-      kicker: "第二段实验",
+      kicker: condSegmentLabel("C1") + "实验",
       title: "查找任务，加上高低音",
       body: [
-        "第一段只有语音的部分做完了。",
-        "现在是第二段：每摸到一项，会先听到一声高低音，再听到名称。",
+        "这一段每摸到一项，会先听到一声高低音，再听到名称。",
         "还是找指定的东西，找到以后快速点两下。"
       ],
       hint: "点屏幕任意位置继续",
-      say: "第一段做完了。现在开始第二段。这一段每摸到一项，会先听到一声高低音，再听到名称。还是找指定的东西，找到以后快速点两下。点屏幕继续。",
+      say: condSegmentLabel("C1") + "。每摸到一项，会先听到一声高低音，再听到名称。还是找指定的东西，找到以后快速点两下。点屏幕继续。",
       next: function () { nextTrial(); }
     });
     return;
@@ -1829,16 +1859,16 @@ function showSurvey() {
     say: "查找做完了。接下来请研究助手把几道题读给你听，你口头回答，助手帮你点选。",
     html: '<div class="k">研究助手口述代填</div><h2>做完后的几道题</h2>' +
       '<p class="meta">请把灰色说明读给被试听，被试说数字或选项，你点选。最后一题把原话记下来即可。</p>' +
-      scaleQ("pitch_disc", "1. 高低音能不能分出高、中、低", "刚才第二段那些高低音，你能不能听出至少高、中、低三档？一是完全听不出，五是很容易听出。", "听不出", "很容易") +
+      scaleQ("pitch_disc", "1. 高低音能不能分出高、中、低", "刚才有高低音的那段，你能不能听出至少高、中、低三档？一是完全听不出，五是很容易听出。", "听不出", "很容易") +
       scaleQ("pitch_layer", "2. 高低音有没有帮你判断在哪一层", "这些高低音有没有帮你判断手指大概在哪一层？一是完全没有帮助，五是很有帮助。", "没有帮助", "很有帮助") +
       '<div class="q"><div class="ql">3. 哪一段更好找</div>' +
-      '<p class="read">第一段只有语音，第二段有高低音。你觉得哪一段更好找？</p>' +
+      '<p class="read">一段只有语音，一段有高低音。你觉得哪一段更好找？</p>' +
       '<div class="choice" id="q-which">' +
-      '<button type="button" data-v="c0">第一段更好</button>' +
+      '<button type="button" data-v="c0">只有语音更好</button>' +
       '<button type="button" data-v="same">差不多</button>' +
-      '<button type="button" data-v="c1">第二段更好</button></div></div>' +
-      scaleQ("effort_c0", "4. 第一段有多费力（只有语音）", "第一段只有语音、没有高低音。做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
-      scaleQ("effort_c1", "5. 第二段有多费力（有高低音）", "第二段有高低音。做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
+      '<button type="button" data-v="c1">有高低音更好</button></div></div>' +
+      scaleQ("effort_c0", "4. 只有语音有多费力", "只有语音、没有高低音那一段，做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
+      scaleQ("effort_c1", "5. 有高低音有多费力", "有高低音那一段，做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
       '<div class="q"><div class="ql">6. 实验还有什么可以改的</div>' +
       '<p class="read">你觉得刚才这套实验，还有什么可以改的？想到什么说什么。</p>' +
       '<textarea id="q-improve" placeholder="助手把原话记在这里"></textarea></div>' +
@@ -1872,7 +1902,7 @@ function showDone() {
   const scored = session.trials.filter(function (t) { return !t.phase; });
   const ok = scored.filter(function (t) { return t.success; }).length;
   const lines = scored.map(function (t) {
-    return (t.practice ? "练习" : (t.cond === "C0" ? "第一段" : "第二段")) + " " + t.title + "，" + (t.success ? "成功" : (t.timeout ? "超时" : "未完成")) + "，用时" + Math.round((t.time_ms || 0) / 1000) + "秒，点错" + t.n_errors + "次";
+    return (t.practice ? "练习" : condSegmentLabel(t.cond)) + " " + t.title + "，" + (t.success ? "成功" : (t.timeout ? "超时" : "未完成")) + "，用时" + Math.round((t.time_ms || 0) / 1000) + "秒，点错" + t.n_errors + "次";
   });
   showGuide({
     kicker: "全部结束",
@@ -1898,7 +1928,7 @@ function downloadLog() {
   setTimeout(function () {
     const scored = (session.trials || []).filter(function (t) { return !t.phase; });
     const s = session.survey || {};
-    const head = ["pid", "session_id", "vision", "sr_exp", "trial_i", "cond", "practice", "tid", "title", "success", "timeout", "started_at", "ended_at", "time_ms", "time_s", "n_errors", "n_focus", "pitch_disc", "pitch_layer", "which_better", "effort_c0", "effort_c1", "improve"];
+    const head = ["pid", "session_id", "order", "vision", "sr_exp", "trial_i", "cond", "practice", "tid", "title", "success", "timeout", "started_at", "ended_at", "time_ms", "time_s", "n_errors", "n_focus", "unique_levels", "n_leave", "n_pan", "n_step", "n_repeat", "pitch_disc", "pitch_layer", "which_better", "effort_c0", "effort_c1", "improve"];
     const last = scored.length - 1;
     const rows = [head.join(",")].concat(scored.map(function (t, i) {
       const ms = t.time_ms || 0;
@@ -1906,6 +1936,7 @@ function downloadLog() {
       return [
         csvCell(t.participant_id || pid),
         csvCell(t.session_id || sid),
+        csvCell(session.order || ""),
         csvCell(session.vision || ""),
         csvCell(session.sr_exp || ""),
         i + 1,
@@ -1921,6 +1952,11 @@ function downloadLog() {
         (ms / 1000).toFixed(3),
         t.n_errors || 0,
         t.n_focus || 0,
+        t.unique_levels || 0,
+        t.n_leave || 0,
+        t.n_pan || 0,
+        t.n_step || 0,
+        t.n_repeat || 0,
         csvCell(surveyRow ? (s.pitch_disc || "") : ""),
         csvCell(surveyRow ? (s.pitch_layer || "") : ""),
         csvCell(surveyRow ? (s.which_better || "") : ""),
@@ -1941,28 +1977,38 @@ function csvCell(v) {
   if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
-function buildTrials() {
+function buildTrials(order) {
   const cart = { tid: "t-cart", title: "找到购物车", say: "请找到底部的购物车，找到以后在上面快速点两下。" };
   const ear = { tid: "t-seckill59", title: "找到五十九元的秒杀耳机", say: "请找到限时秒杀里，标价五十九元的无线耳机，找到以后快速点两下。耳机在秒杀横条里，可能需要双指向右滑。" };
-  return [
+  const blockC0 = [
     { phase: "brief-c0" },
     { phase: "adapt-c0" },
     { practice: 1, cond: "C0", tid: "t-search", title: "练习：找到搜索按钮", say: "先做一题练习。请找到搜索按钮，找到以后快速点两下。这一题只能听到语音，听不到高低音。" },
     Object.assign({ cond: "C0" }, cart),
-    Object.assign({ cond: "C0" }, ear),
-    { phase: "break" },
+    Object.assign({ cond: "C0" }, ear)
+  ];
+  const blockC1 = [
     { phase: "brief-c1" },
     { phase: "adapt-c1" },
     Object.assign({ cond: "C1" }, cart),
     Object.assign({ cond: "C1" }, ear)
   ];
+  if (order === "C1-C0") return blockC1.concat([{ phase: "break" }], blockC0);
+  return blockC0.concat([{ phase: "break" }], blockC1);
+}
+function pickOrder(pid) {
+  // 编号末位奇数：C1→C0；偶数或空：C0→C1
+  const s = String(pid || "").replace(/\D/g, "");
+  if (!s) return "C0-C1";
+  return (parseInt(s.slice(-1), 10) % 2 === 1) ? "C1-C0" : "C0-C1";
 }
 function startProtocol() {
+  const order = pickOrder(sessionMeta.participant_id);
   session = {
     t0: Date.now(),
     started_at: isoNow(),
     session_id: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
-    order: "C0-C1",
+    order: order,
     scene: "taobao",
     participant_id: sessionMeta.participant_id,
     vision: sessionMeta.vision,
@@ -1971,7 +2017,7 @@ function startProtocol() {
     events: [],
     survey: null
   };
-  trials = buildTrials();
+  trials = buildTrials(order);
   trialIndex = -1;
   persistSession();
   nextTrial();
