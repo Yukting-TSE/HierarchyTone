@@ -580,7 +580,7 @@ icons.addEventListener("scroll", function () {
 });
 
 let ctx = null, masterGain = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
-let sessionMeta = { participant_id: "", vision: "", sr_exp: "" };
+let sessionMeta = { participant_id: "", vision: "", sr_exp: "", order: "" };
 let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null, tryStarted = 0, panTravel = 0, adaptTimer = 0;
 let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null, lastProductKey = "", lastPanAnnounceKey = "", lastPanAnnounceAt = 0, activateTarget = null, activateAt = 0;
 function voiceKey(v) {
@@ -1110,7 +1110,10 @@ function repeatTrialPrompt() {
   const kind = trial.practice ? "练习题" : "本题";
   const say = kind + "。" + (trial.title || "") + "。" + (trial.say || "") + "。找到以后，在那一项上快速点两下。若再忘记，三指轻点屏幕重听本题。";
   speak(say, GUIDE_RATE);
-  if (session) session.events.push({ t: Date.now() - session.t0, type: "repeat_prompt" });
+  if (session) {
+    session.events.push({ t: Date.now() - session.t0, type: "repeat_prompt" });
+    if (trial && !trial.phase) trial.n_repeat = (trial.n_repeat || 0) + 1;
+  }
 }
 function focusElement(cell, opts) {
   if (!cell || !ready) return;
@@ -1123,9 +1126,32 @@ function focusElement(cell, opts) {
   lastId = cell.dataset.id;
   speechSynthesis.cancel();
   if (trial && !trial.phase) {
+    const id = cell.dataset.id;
+    const lv = levelIndex(cell.dataset.lv);
+    const now = Date.now();
+    if (!trial.level_ms) trial.level_ms = [0, 0, 0, 0, 0, 0];
+    if (!trial.level_counts) trial.level_counts = [0, 0, 0, 0, 0, 0];
+    if (!trial.levels) trial.levels = {};
+    if (trial._last_lv != null && trial._last_lv_t != null) {
+      const dt = Math.max(0, now - trial._last_lv_t);
+      trial.level_ms[trial._last_lv] = (trial.level_ms[trial._last_lv] || 0) + dt;
+    }
+    trial._last_lv = lv;
+    trial._last_lv_t = now;
     trial.n_focus += 1;
-    trial.levels[cell.dataset.lv] = 1;
-    session.events.push({ t: Date.now() - session.t0, type: "enter", id: cell.dataset.id, lv: cell.dataset.lv, sp: cell.dataset.sp, region: regionOf(cell).id });
+    trial.levels[String(lv)] = 1;
+    trial.level_counts[lv] = (trial.level_counts[lv] || 0) + 1;
+    if (!trial.path_ids) trial.path_ids = [];
+    trial.path_ids.push(id);
+    if (!trial.seen_ids) trial.seen_ids = {};
+    trial.seen_ids[id] = 1;
+    const tid = focusTid(cell);
+    if (tid && tid === trial.tid && trial.t_first_hit == null) {
+      trial.t_first_hit = now - (trial.t0 || now);
+      trial.focuses_to_first_hit = trial.n_focus;
+      if (session) session.events.push({ t: now - session.t0, type: "first_hit", id: id, lv: cell.dataset.lv, tid: tid });
+    }
+    if (session) session.events.push({ t: now - session.t0, type: "enter", id: id, lv: cell.dataset.lv, sp: cell.dataset.sp, region: regionOf(cell).id });
   }
   announceNode(cell, opts);
   if (tryMode === "explore") {
@@ -1603,12 +1629,27 @@ function persistSession() {
   if (!session) return;
   try { localStorage.setItem("ht-session", JSON.stringify(session)); } catch (err) {}
 }
+function flushLevelMs(endedAt) {
+  if (!trial || trial._last_lv == null || trial._last_lv_t == null) return;
+  if (!trial.level_ms) trial.level_ms = [0, 0, 0, 0, 0, 0];
+  const dt = Math.max(0, endedAt - trial._last_lv_t);
+  trial.level_ms[trial._last_lv] = (trial.level_ms[trial._last_lv] || 0) + dt;
+  trial._last_lv_t = endedAt;
+}
 function snapshotTrial(result, endedAt, perfEnd) {
   const startedAt = trial.t0 || endedAt;
   const timeMs = trial.t0_perf != null ? Math.max(0, Math.round(perfEnd - trial.t0_perf)) : Math.max(0, endedAt - startedAt);
+  flushLevelMs(endedAt);
+  const pathLen = trial.n_focus || 0;
+  const nUnique = Object.keys(trial.seen_ids || {}).length;
+  const nRevisits = Math.max(0, pathLen - nUnique);
+  const pathEff = pathLen > 0 ? Math.round((nUnique / pathLen) * 10000) / 10000 : null;
+  const levelCounts = (trial.level_counts || [0, 0, 0, 0, 0, 0]).slice();
+  const levelMs = (trial.level_ms || [0, 0, 0, 0, 0, 0]).slice();
   return {
     participant_id: session.participant_id,
     session_id: session.session_id,
+    order: session.order || "",
     cond: trial.cond || "",
     practice: trial.practice ? 1 : 0,
     tid: trial.tid || "",
@@ -1621,9 +1662,18 @@ function snapshotTrial(result, endedAt, perfEnd) {
     t0_ms: startedAt,
     ended_ms: endedAt,
     time_ms: timeMs,
-    n_focus: trial.n_focus || 0,
+    first_hit_ms: trial.t_first_hit == null ? null : Math.max(0, Math.round(trial.t_first_hit)),
+    focuses_to_first_hit: trial.focuses_to_first_hit == null ? null : trial.focuses_to_first_hit,
+    n_focus: pathLen,
+    n_unique: nUnique,
+    n_revisits: nRevisits,
+    path_len: pathLen,
+    path_efficiency: pathEff,
     n_errors: trial.n_errors || 0,
-    levels: trial.levels || {}
+    n_repeat: trial.n_repeat || 0,
+    levels: trial.levels || {},
+    level_counts: levelCounts,
+    level_ms: levelMs
   };
 }
 function finishTrial(result) {
@@ -1643,9 +1693,24 @@ function finishTrial(result) {
   else if (result === "timeout") speak("时间到", GUIDE_RATE);
   setTimeout(function () { nextTrial(); }, result === "success" ? 900 : 1100);
 }
+function orderParts() {
+  const order = (session && session.order) || "C0-C1";
+  const first = order === "C1-C0" ? "C1" : "C0";
+  return { order: order, first: first, second: first === "C0" ? "C1" : "C0" };
+}
+function condDesc(cond) {
+  return cond === "C0" ? "只有语音，没有高低音" : "有高低音加语音";
+}
+function segOf(cond) {
+  const p = orderParts();
+  if (cond === p.first) return 1;
+  if (cond === p.second) return 2;
+  return 0;
+}
 function announceTrial() {
   const c0 = trial.cond === "C0";
-  const kind = trial.practice ? "练习" : (c0 ? "第一段" : "第二段");
+  const seg = segOf(trial.cond);
+  const kind = trial.practice ? "练习" : (seg === 1 ? "第一段" : "第二段");
   const condTxt = c0
     ? "这一题只能听到语音，听不到高低音。"
     : "这一题会先听到一声高低音，再听到名称。";
@@ -1673,7 +1738,16 @@ function startTrial() {
   trial.started_at = isoNow(trial.t0);
   trial.n_focus = 0;
   trial.n_errors = 0;
+  trial.n_repeat = 0;
   trial.levels = {};
+  trial.level_counts = [0, 0, 0, 0, 0, 0];
+  trial.level_ms = [0, 0, 0, 0, 0, 0];
+  trial.path_ids = [];
+  trial.seen_ids = {};
+  trial.t_first_hit = null;
+  trial.focuses_to_first_hit = null;
+  trial._last_lv = null;
+  trial._last_lv_t = null;
   taskbar.classList.remove("show");
   bindHit();
   ready = true;
@@ -1723,53 +1797,44 @@ function nextTrial() {
   trialIndex += 1;
   if (trialIndex >= trials.length) { endSession(); return; }
   trial = trials[trialIndex];
-  if (trial.phase === "brief-c0") {
+  if (trial.phase === "brief") {
+    const cond = trial.cond;
+    const c0 = cond === "C0";
+    const first = segOf(cond) === 1;
+    const title = c0 ? "查找任务，只有语音" : "查找任务，加上高低音";
+    const line = c0
+      ? "只能听到语音，听不到高低音。"
+      : "每摸到一项，会先听到一声高低音，再听到名称。";
     showGuide({
-      kicker: "第一段实验",
-      title: "查找任务，只有语音",
-      body: [
-        "接下来开始做查找实验。实验分两段。",
-        "现在是第一段：只能听到语音，听不到高低音。",
-        "请在页面上找指定的东西，找到以后快速点两下。"
-      ],
+      kicker: first ? "第一段实验" : "第二段实验",
+      title: title,
+      body: first
+        ? ["接下来开始做查找实验。实验分两段。", "现在是第一段：" + line, "请在页面上找指定的东西，找到以后快速点两下。"]
+        : ["第一段做完了。", "现在是第二段：" + line, "还是找指定的东西，找到以后快速点两下。"],
       hint: "点屏幕任意位置继续",
-      say: "接下来开始做查找实验。实验分两段。现在是第一段，只能听到语音，听不到高低音。请在页面上找指定的东西，找到以后快速点两下。点屏幕继续。",
+      say: first
+        ? ("接下来开始做查找实验。实验分两段。现在是第一段，" + line + "请在页面上找指定的东西，找到以后快速点两下。点屏幕继续。")
+        : ("第一段做完了。现在开始第二段。" + line + "还是找指定的东西，找到以后快速点两下。点屏幕继续。"),
       next: function () { nextTrial(); }
     });
     return;
   }
-  if (trial.phase === "adapt-c0") {
-    showAdapt("C0", function () { nextTrial(); });
+  if (trial.phase === "adapt") {
+    showAdapt(trial.cond, function () { nextTrial(); });
     return;
   }
   if (trial.phase === "break") {
+    const p = orderParts();
+    const doneDesc = condDesc(p.first);
+    const nextDesc = condDesc(p.second);
     showGuide({
       kicker: "第一段结束",
-      title: "只有语音的部分做完了",
-      body: ["刚才的查找题都只能听到语音，没有高低音。", "接下来第二段会加上高低音。先听一段说明，再适应一下。"],
+      title: "第一段做完了",
+      body: ["刚才第一段是：" + doneDesc + "。", "接下来第二段是：" + nextDesc + "。先听一段说明，再适应一下。"],
       hint: "点屏幕任意位置继续",
-      say: "第一段结束。刚才只能听到语音，听不到高低音。接下来第二段会加上高低音。点屏幕继续。",
+      say: "第一段结束。刚才是" + doneDesc + "。接下来第二段是" + nextDesc + "。点屏幕继续。",
       next: function () { nextTrial(); }
     });
-    return;
-  }
-  if (trial.phase === "brief-c1") {
-    showGuide({
-      kicker: "第二段实验",
-      title: "查找任务，加上高低音",
-      body: [
-        "第一段只有语音的部分做完了。",
-        "现在是第二段：每摸到一项，会先听到一声高低音，再听到名称。",
-        "还是找指定的东西，找到以后快速点两下。"
-      ],
-      hint: "点屏幕任意位置继续",
-      say: "第一段做完了。现在开始第二段。这一段每摸到一项，会先听到一声高低音，再听到名称。还是找指定的东西，找到以后快速点两下。点屏幕继续。",
-      next: function () { nextTrial(); }
-    });
-    return;
-  }
-  if (trial.phase === "adapt-c1") {
-    showAdapt("C1", function () { nextTrial(); });
     return;
   }
   announceTrial();
@@ -1803,9 +1868,9 @@ function pickExclusive(root, sel, key, store) {
 }
 function showIntake() {
   showForm({
-    say: "请研究助手填写编号和基本情况。填好后开始第一段。",
+    say: "请研究助手填写编号、基本情况，并选择实验顺序。填好后开始第一段。",
     html: '<div class="k">研究助手填写</div><h2>建档</h2>' +
-      '<p class="meta">编号和基本情况不用读给被试听。填好后点开始。</p>' +
+      '<p class="meta">编号、视力和顺序不用读给被试听。顺序用于平衡设计，后台会记录。</p>' +
       '<div class="q"><div class="ql">被试编号</div><input id="f-pid" type="text" inputmode="numeric" placeholder="例如 03" autocomplete="off"></div>' +
       '<div class="q"><div class="ql">视力</div><div class="choice" id="f-vision">' +
       '<button type="button" data-v="blind">全盲</button>' +
@@ -1814,19 +1879,28 @@ function showIntake() {
       '<button type="button" data-v="none">几乎不用</button>' +
       '<button type="button" data-v="some">会一些</button>' +
       '<button type="button" data-v="daily">每天用</button></div></div>' +
+      '<div class="q"><div class="ql">实验顺序（平衡）</div><div class="choice" id="f-order">' +
+      '<button type="button" data-v="C0-C1">C0→C1 先语音</button>' +
+      '<button type="button" data-v="C1-C0">C1→C0 先高低音</button></div></div>' +
       '<button type="button" class="go" id="f-go">开始第一段实验</button>',
     bind: function (root) {
-      var store = { vision: "", sr_exp: "" };
+      var store = { vision: "", sr_exp: "", order: "" };
       pickExclusive(root, "#f-vision button", "vision", store);
       pickExclusive(root, "#f-sr button", "sr_exp", store);
+      pickExclusive(root, "#f-order button", "order", store);
       root.querySelector("#f-pid").addEventListener("touchend", function (e) { e.stopPropagation(); });
       root.querySelector("#f-go").addEventListener("click", function (e) {
         e.stopPropagation();
         sessionMeta.participant_id = (root.querySelector("#f-pid").value || "").trim();
         sessionMeta.vision = store.vision;
         sessionMeta.sr_exp = store.sr_exp;
+        sessionMeta.order = store.order;
         if (!sessionMeta.participant_id) {
           speak("请先填写被试编号", GUIDE_RATE);
+          return;
+        }
+        if (!sessionMeta.order) {
+          speak("请选择实验顺序", GUIDE_RATE);
           return;
         }
         startProtocol();
@@ -1835,6 +1909,8 @@ function showIntake() {
   });
 }
 function showSurvey() {
+  var p = orderParts();
+  var orderNote = "本场顺序：" + p.order + "。第一段是" + condDesc(p.first) + "，第二段是" + condDesc(p.second) + "。";
   var answers = {
     pitch_disc: "",
     pitch_layer: "",
@@ -1846,17 +1922,17 @@ function showSurvey() {
   showForm({
     say: "查找做完了。接下来请研究助手把几道题读给你听，你口头回答，助手帮你点选。",
     html: '<div class="k">研究助手口述代填</div><h2>做完后的几道题</h2>' +
-      '<p class="meta">请把灰色说明读给被试听，被试说数字或选项，你点选。最后一题把原话记下来即可。</p>' +
-      scaleQ("pitch_disc", "1. 高低音能不能分出高、中、低", "刚才第二段那些高低音，你能不能听出至少高、中、低三档？一是完全听不出，五是很容易听出。", "听不出", "很容易") +
+      '<p class="meta">请把灰色说明读给被试听，被试说数字或选项，你点选。最后一题把原话记下来即可。<br>' + orderNote + "</p>" +
+      scaleQ("pitch_disc", "1. 高低音能不能分出高、中、低", "刚才带高低音的那些题，你能不能听出至少高、中、低三档？一是完全听不出，五是很容易听出。", "听不出", "很容易") +
       scaleQ("pitch_layer", "2. 高低音有没有帮你判断在哪一层", "这些高低音有没有帮你判断手指大概在哪一层？一是完全没有帮助，五是很有帮助。", "没有帮助", "很有帮助") +
-      '<div class="q"><div class="ql">3. 哪一段更好找</div>' +
-      '<p class="read">第一段只有语音，第二段有高低音。你觉得哪一段更好找？</p>' +
+      '<div class="q"><div class="ql">3. 哪一种更好找</div>' +
+      '<p class="read">一种只有语音，一种有高低音。你觉得哪一种更好找？（不按先后，按感觉）</p>' +
       '<div class="choice" id="q-which">' +
-      '<button type="button" data-v="c0">第一段更好</button>' +
+      '<button type="button" data-v="c0">只有语音更好</button>' +
       '<button type="button" data-v="same">差不多</button>' +
-      '<button type="button" data-v="c1">第二段更好</button></div></div>' +
-      scaleQ("effort_c0", "4. 第一段有多费力（只有语音）", "第一段只有语音、没有高低音。做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
-      scaleQ("effort_c1", "5. 第二段有多费力（有高低音）", "第二段有高低音。做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
+      '<button type="button" data-v="c1">有高低音更好</button></div></div>' +
+      scaleQ("effort_c0", "4. 只有语音有多费力", "只有语音、没有高低音的那些题，做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
+      scaleQ("effort_c1", "5. 有高低音有多费力", "有高低音的那些题，做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
       '<div class="q"><div class="ql">6. 实验还有什么可以改的</div>' +
       '<p class="read">你觉得刚才这套实验，还有什么可以改的？想到什么说什么。</p>' +
       '<textarea id="q-improve" placeholder="助手把原话记在这里"></textarea></div>' +
@@ -1887,21 +1963,82 @@ function scaleQ(key, title, read, low, high) {
     '<div class="ends"><span>' + low + "</span><span>" + high + "</span></div></div>";
 }
 function showDone() {
-  const scored = session.trials.filter(function (t) { return !t.phase; });
-  const ok = scored.filter(function (t) { return t.success; }).length;
-  const lines = scored.map(function (t) {
-    return (t.practice ? "练习" : (t.cond === "C0" ? "第一段" : "第二段")) + " " + t.title + "，" + (t.success ? "成功" : (t.timeout ? "超时" : "未完成")) + "，用时" + Math.round((t.time_ms || 0) / 1000) + "秒，点错" + t.n_errors + "次";
-  });
+  const all = session.trials.filter(function (t) { return !t.phase; });
+  const main = all.filter(function (t) { return !t.practice; });
+  const practice = all.filter(function (t) { return t.practice; });
+  const ok = main.filter(function (t) { return t.success; }).length;
+  const lineOf = function (t) {
+    const seg = t.practice ? "练习" : (segOf(t.cond) === 1 ? "第一段" : "第二段");
+    return seg + " " + t.title + "，" + (t.success ? "成功" : (t.timeout ? "超时" : "未完成")) + "，用时" + Math.round((t.time_ms || 0) / 1000) + "秒，点错" + t.n_errors + "次" + (t.first_hit_ms != null ? "，首次命中" + Math.round(t.first_hit_ms / 1000) + "秒" : "");
+  };
+  const body = [
+    "问卷已记下。顺序 " + (session.order || "") + "。主分析 " + ok + " / " + main.length + " 题成功。" + (practice.length ? " 练习另存，不进主分析。" : "")
+  ].concat(main.length ? ["【主分析】"].concat(main.map(lineOf)) : []).concat(practice.length ? ["【练习（不进主分析）】"].concat(practice.map(lineOf)) : []);
   showGuide({
     kicker: "全部结束",
     title: "谢谢，可以下载了",
-    body: ["问卷已记下。共完成 " + ok + " / " + scored.length + " 题。"].concat(lines),
+    body: body,
     say: "谢谢，题目和问卷都记下来了。",
     actions: [
       { label: "下载实验记录", run: downloadLog },
       { label: "下一被试（刷新页面）", alt: 1, run: function () { location.reload(); } }
     ]
   });
+}
+function trialCsvHead() {
+  return ["pid", "session_id", "order", "vision", "sr_exp", "trial_i", "cond", "practice", "tid", "title", "success", "timeout", "started_at", "ended_at", "time_ms", "time_s", "first_hit_ms", "first_hit_s", "focuses_to_first_hit", "n_errors", "n_focus", "n_unique", "n_revisits", "path_len", "path_efficiency", "n_repeat", "level_c0", "level_c1", "level_c2", "level_c3", "level_c4", "level_c5", "level_ms0", "level_ms1", "level_ms2", "level_ms3", "level_ms4", "level_ms5", "pitch_disc", "pitch_layer", "which_better", "effort_c0", "effort_c1", "improve"];
+}
+function trialCsvRow(t, i, attachSurvey) {
+  const pid = session.participant_id || "x";
+  const sid = session.session_id || "s";
+  const s = session.survey || {};
+  const ms = t.time_ms || 0;
+  const fh = t.first_hit_ms;
+  const lc = t.level_counts || [0, 0, 0, 0, 0, 0];
+  const lm = t.level_ms || [0, 0, 0, 0, 0, 0];
+  return [
+    csvCell(t.participant_id || pid),
+    csvCell(t.session_id || sid),
+    csvCell(t.order || session.order || ""),
+    csvCell(session.vision || ""),
+    csvCell(session.sr_exp || ""),
+    i + 1,
+    csvCell(t.cond || ""),
+    t.practice ? 1 : 0,
+    csvCell(t.tid || ""),
+    csvCell(t.title || ""),
+    t.success || 0,
+    t.timeout || 0,
+    csvCell(t.started_at || ""),
+    csvCell(t.ended_at || ""),
+    ms,
+    (ms / 1000).toFixed(3),
+    fh == null ? "" : fh,
+    fh == null ? "" : (fh / 1000).toFixed(3),
+    t.focuses_to_first_hit == null ? "" : t.focuses_to_first_hit,
+    t.n_errors || 0,
+    t.n_focus || 0,
+    t.n_unique || 0,
+    t.n_revisits || 0,
+    t.path_len || 0,
+    t.path_efficiency == null ? "" : t.path_efficiency,
+    t.n_repeat || 0,
+    lc[0] || 0, lc[1] || 0, lc[2] || 0, lc[3] || 0, lc[4] || 0, lc[5] || 0,
+    Math.round(lm[0] || 0), Math.round(lm[1] || 0), Math.round(lm[2] || 0), Math.round(lm[3] || 0), Math.round(lm[4] || 0), Math.round(lm[5] || 0),
+    csvCell(attachSurvey ? (s.pitch_disc || "") : ""),
+    csvCell(attachSurvey ? (s.pitch_layer || "") : ""),
+    csvCell(attachSurvey ? (s.which_better || "") : ""),
+    csvCell(attachSurvey ? (s.effort_c0 || "") : ""),
+    csvCell(attachSurvey ? (s.effort_c1 || "") : ""),
+    csvCell(attachSurvey ? (s.improve || "") : "")
+  ].join(",");
+}
+function downloadCsv(name, rows) {
+  const csv = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+  const b = document.createElement("a");
+  b.href = URL.createObjectURL(csv);
+  b.download = name;
+  b.click();
 }
 function downloadLog() {
   if (!session) return;
@@ -1915,43 +2052,20 @@ function downloadLog() {
   a.click();
   setTimeout(function () {
     const scored = (session.trials || []).filter(function (t) { return !t.phase; });
-    const s = session.survey || {};
-    const head = ["pid", "session_id", "vision", "sr_exp", "trial_i", "cond", "practice", "tid", "title", "success", "timeout", "started_at", "ended_at", "time_ms", "time_s", "n_errors", "n_focus", "pitch_disc", "pitch_layer", "which_better", "effort_c0", "effort_c1", "improve"];
-    const last = scored.length - 1;
-    const rows = [head.join(",")].concat(scored.map(function (t, i) {
-      const ms = t.time_ms || 0;
-      const surveyRow = i === last;
-      return [
-        csvCell(t.participant_id || pid),
-        csvCell(t.session_id || sid),
-        csvCell(session.vision || ""),
-        csvCell(session.sr_exp || ""),
-        i + 1,
-        csvCell(t.cond || ""),
-        t.practice ? 1 : 0,
-        csvCell(t.tid || ""),
-        csvCell(t.title || ""),
-        t.success || 0,
-        t.timeout || 0,
-        csvCell(t.started_at || ""),
-        csvCell(t.ended_at || ""),
-        ms,
-        (ms / 1000).toFixed(3),
-        t.n_errors || 0,
-        t.n_focus || 0,
-        csvCell(surveyRow ? (s.pitch_disc || "") : ""),
-        csvCell(surveyRow ? (s.pitch_layer || "") : ""),
-        csvCell(surveyRow ? (s.which_better || "") : ""),
-        csvCell(surveyRow ? (s.effort_c0 || "") : ""),
-        csvCell(surveyRow ? (s.effort_c1 || "") : ""),
-        csvCell(surveyRow ? (s.improve || "") : "")
-      ].join(",");
+    const main = scored.filter(function (t) { return !t.practice; });
+    const practice = scored.filter(function (t) { return !!t.practice; });
+    const head = trialCsvHead();
+    const mainRows = [head.join(",")].concat(main.map(function (t, i) {
+      return trialCsvRow(t, i, i === main.length - 1);
     }));
-    const csv = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
-    const b = document.createElement("a");
-    b.href = URL.createObjectURL(csv);
-    b.download = "hierarchytone-" + pid + "-" + sid + ".csv";
-    b.click();
+    downloadCsv("hierarchytone-" + pid + "-" + sid + "-main.csv", mainRows);
+    setTimeout(function () {
+      if (!practice.length) return;
+      const pracRows = [head.join(",")].concat(practice.map(function (t, i) {
+        return trialCsvRow(t, i, false);
+      }));
+      downloadCsv("hierarchytone-" + pid + "-" + sid + "-practice.csv", pracRows);
+    }, 400);
   }, 600);
 }
 function csvCell(v) {
@@ -1959,28 +2073,34 @@ function csvCell(v) {
   if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
-function buildTrials() {
+function buildTrials(order) {
+  const first = order === "C1-C0" ? "C1" : "C0";
+  const second = first === "C0" ? "C1" : "C0";
   const cart = { tid: "t-cart", title: "找到购物车", say: "请找到底部的购物车，找到以后在上面快速点两下。" };
   const ear = { tid: "t-seckill59", title: "找到五十九元的秒杀耳机", say: "请找到限时秒杀里，标价五十九元的无线耳机，找到以后快速点两下。耳机在秒杀横条里，可能需要双指向右滑。" };
+  const practiceSay = first === "C0"
+    ? "先做一题练习。请找到搜索按钮，找到以后快速点两下。这一题只能听到语音，听不到高低音。"
+    : "先做一题练习。请找到搜索按钮，找到以后快速点两下。这一题会先听到一声高低音，再听到名称。";
   return [
-    { phase: "brief-c0" },
-    { phase: "adapt-c0" },
-    { practice: 1, cond: "C0", tid: "t-search", title: "练习：找到搜索按钮", say: "先做一题练习。请找到搜索按钮，找到以后快速点两下。这一题只能听到语音，听不到高低音。" },
-    Object.assign({ cond: "C0" }, cart),
-    Object.assign({ cond: "C0" }, ear),
+    { phase: "brief", cond: first },
+    { phase: "adapt", cond: first },
+    { practice: 1, cond: first, tid: "t-search", title: "练习：找到搜索按钮", say: practiceSay },
+    Object.assign({ cond: first }, cart),
+    Object.assign({ cond: first }, ear),
     { phase: "break" },
-    { phase: "brief-c1" },
-    { phase: "adapt-c1" },
-    Object.assign({ cond: "C1" }, cart),
-    Object.assign({ cond: "C1" }, ear)
+    { phase: "brief", cond: second },
+    { phase: "adapt", cond: second },
+    Object.assign({ cond: second }, cart),
+    Object.assign({ cond: second }, ear)
   ];
 }
 function startProtocol() {
+  const order = sessionMeta.order === "C1-C0" ? "C1-C0" : "C0-C1";
   session = {
     t0: Date.now(),
     started_at: isoNow(),
     session_id: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
-    order: "C0-C1",
+    order: order,
     scene: "taobao",
     participant_id: sessionMeta.participant_id,
     vision: sessionMeta.vision,
@@ -1989,7 +2109,7 @@ function startProtocol() {
     events: [],
     survey: null
   };
-  trials = buildTrials();
+  trials = buildTrials(order);
   trialIndex = -1;
   persistSession();
   nextTrial();

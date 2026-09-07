@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -15,20 +15,27 @@
     font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     background: #f3f3f3; color: #111;
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    touch-action: none;
+    -ms-touch-action: none;
   }
   #page {
     position: absolute; left: 0; right: 0; top: 0;
-    bottom: calc(52px + 44px + env(safe-area-inset-bottom));
+    bottom: calc(96px + env(safe-area-inset-bottom));
     overflow-x: hidden; overflow-y: auto;
     touch-action: none; background: #f3f3f3;
+    z-index: 1;
   }
   .sim-el { position: relative; outline: 3px solid transparent; outline-offset: -2px; }
-  .sim-el.on { outline-color: #ff5000; z-index: 4; }
+  .sim-el.on { outline-color: #ff5000; z-index: 1; }
 
   .head {
     background: #fff;
     padding: calc(4px + env(safe-area-inset-top)) 0 8px;
-    position: sticky; top: 0; z-index: 3;
+    position: sticky; top: 0; z-index: 40;
+    isolation: isolate;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    box-shadow: 0 1px 0 rgba(0,0,0,.06);
   }
   .tabs {
     display: flex; gap: 14px; padding: 4px 14px 8px;
@@ -54,8 +61,8 @@
   .scan, .cam { font-size: 18px; width: 28px; text-align: center; flex-shrink: 0; }
   .ph { flex: 1; font-size: 15px; color: #999; }
   .go {
-    height: 32px; padding: 0 14px; border-radius: 16px; background: #ff5000;
-    color: #fff; font-size: 14px; font-weight: 700; display: flex; align-items: center;
+    height: 36px; min-width: 56px; padding: 0 16px; border-radius: 18px; background: #ff5000;
+    color: #fff; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center;
   }
 
   .icons-scroll {
@@ -195,9 +202,14 @@
     font-size: 13px; color: #999; font-weight: 600;
   }
 
+  #bottom-dock {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    z-index: 5;
+    background: #fff;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
   #coupon {
-    position: absolute; left: 0; right: 0; z-index: 4;
-    bottom: calc(52px + env(safe-area-inset-bottom));
+    position: relative; left: auto; right: auto; bottom: auto;
     height: 44px; background: #ff8fab;
     display: flex; align-items: center; padding: 0 8px 0 10px; gap: 8px;
   }
@@ -214,9 +226,10 @@
   .c-x { color: #fff; font-size: 16px; padding: 4px; opacity: .85; }
 
   #tabbar {
-    position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
-    display: flex; background: #fff; border-top: 1px solid #eee;
-    padding: 4px 0 calc(6px + env(safe-area-inset-bottom));
+    position: relative; left: auto; right: auto; bottom: auto;
+    height: 52px; box-sizing: border-box;
+    display: flex; align-items: center; background: #fff; border-top: 1px solid #eee;
+    padding: 4px 0 6px;
   }
   .nav { flex: 1; text-align: center; color: #666; font-size: 10px; }
   .nav .n { font-size: 22px; line-height: 1.15; position: relative; display: inline-block; }
@@ -233,21 +246,34 @@
 
   #hit { position: absolute; inset: 0; z-index: 6; display: none; touch-action: none; }
   #gate {
-    position: absolute; inset: 0; z-index: 8; width: 100%; height: 100%;
+    position: absolute; inset: 0; z-index: 60; width: 100%; height: 100%;
     border: 0; margin: 0; background: #111; color: #fff;
     font: 700 28px/1.5 -apple-system, "PingFang SC", sans-serif;
     -webkit-appearance: none; appearance: none;
+    touch-action: none;
   }
   #gate small { display: block; margin-top: 14px; font-size: 18px; font-weight: 500; opacity: .7; }
   #gate .sub { display: block; margin-top: 8px; font-size: 16px; font-weight: 500; opacity: .55; }
 
   #guide {
-    display: none; position: absolute; inset: 0; z-index: 10;
+    display: none; position: absolute; inset: 0; z-index: 55;
     background: #111; color: #fff; padding: 36px 28px 28px;
     box-sizing: border-box; overflow: auto; touch-action: none;
     font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   }
   #guide.show { display: flex; flex-direction: column; justify-content: center; }
+  /* 介绍全屏时压住 sticky 顶栏，避免导航栏冒出来挡字 */
+  body.guide-blocking .head {
+    z-index: 1 !important;
+    -webkit-transform: none !important;
+    transform: none !important;
+    isolation: auto !important;
+  }
+  body.guide-blocking #coupon,
+  body.guide-blocking #tabbar,
+  body.guide-blocking #bottom-dock {
+    z-index: 1 !important;
+  }
   #guide .k { font-size: 16px; letter-spacing: .08em; opacity: .55; margin-bottom: 10px; font-weight: 600; }
   #guide h2 { font-size: 32px; line-height: 1.35; margin: 0 0 16px; font-weight: 800; }
   #guide p { font-size: 22px; line-height: 1.6; margin: 0 0 14px; font-weight: 500; opacity: .95; }
@@ -266,9 +292,11 @@
   }
   #guide.ghost > * { display: none; }
   #taskbar { display: none !important; }
+  /* 找目标题不再显示顶部/底部黑色重听条，改用三指轻点，避免挡住搜索栏 */
+  #recall { display: none !important; }
   #guide.form {
     justify-content: flex-start;
-    touch-action: auto;
+    touch-action: pan-y;
     overflow: auto;
     padding: 22px 18px calc(28px + env(safe-area-inset-bottom));
   }
@@ -444,6 +472,7 @@
   <div class="feed" id="feed"></div>
 </div>
 
+<div id="bottom-dock">
 <div id="coupon">
   <div class="sim-el c-ico" data-lv="1" data-sp="国补，图标">补</div>
   <div class="sim-el c-txt" data-lv="4" data-sp="满八百九十九减一百超市加补券待领取">您有满<b>899减100</b>超市加补券待领取</div>
@@ -458,7 +487,9 @@
   <div class="sim-el nav" data-tid="t-cart" data-demo="l1-cart" data-lv="0" data-sp="购物车，按钮"><div class="n">🛒</div>购物车</div>
   <div class="sim-el nav" data-lv="0" data-sp="我的淘宝，按钮"><div class="n">😊</div>我的淘宝</div>
 </div>
+</div>
 <div id="taskbar"></div>
+<button type="button" id="recall" aria-label="重听本题">重听本题<small>或三指轻点屏幕</small></button>
 <div id="hit"></div>
 <div id="guide"></div>
 <button type="button" id="gate">点击屏幕开始<small>请先戴上耳机</small><span class="sub">先听使用说明，再做查找任务</span></button>
@@ -521,9 +552,11 @@
 })();
 
 const F = { 0: 523.25, 1: 392, 2: 293.66, 3: 220, 4: 164.81, 5: 123.47 };
-const DUR = 0.2, ATT = 0.015, REL = 0.03, DLY = 0.28;
-const LOUD = [1, 1.15, 1.35, 1.6, 1.9, 2.25];
-const SPEECH_RATE = 4, SPEECH_VOL = 0.42, GUIDE_RATE = 2;
+const DUR = 0.14, ATT = 0.02, REL = 0.03, DLY = 0.06;
+const LOUD = [1, 1, 1.05, 1.08, 1.1, 1.12];
+const SPEECH_RATE = 4, SPEECH_VOL = 0.4, GUIDE_RATE = 2;
+const HIT_RADIUS = 52;
+const ACTIVATE_SLACK_MS = 700;
 const page = document.getElementById("page");
 const tabs = document.getElementById("tabs");
 const icons = document.getElementById("icons");
@@ -532,6 +565,7 @@ const hit = document.getElementById("hit");
 const gate = document.getElementById("gate");
 const guide = document.getElementById("guide");
 const taskbar = document.getElementById("taskbar");
+const recallBtn = document.getElementById("recall");
 const TRIAL_MS = 90000;
 const ADAPT_MIN_MS = 22000;
 const ADAPT_MIN_ITEMS = 6;
@@ -545,9 +579,10 @@ icons.addEventListener("scroll", function () {
   });
 });
 
-let ctx = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
-let sessionMeta = { participant_id: "", vision: "", sr_exp: "" };
+let ctx = null, masterGain = null, lastId = null, lastTap = 0, armed = false, ready = false, pan = null, panAxis = "page", mandarinVoice = null, liveOsc = [];
+let sessionMeta = { participant_id: "", vision: "", sr_exp: "", order: "" };
 let pitchOn = true, trial = null, trials = [], trialIndex = -1, trialTimer = 0, session = null, guideHandler = null, tryMode = "", tut = 0, demoLock = false, tutOnce = false, tutSeen = {}, panMark = 0, demoGen = 0, lastGuideTap = 0, tryDone = null, tryStarted = 0, panTravel = 0, adaptTimer = 0;
+let lastRegion = "", leaveSpeakAt = 0, edgeSpeakAt = 0, panAnnounced = false, gesture = null, lastFocusEl = null, lastProductKey = "", lastPanAnnounceKey = "", lastPanAnnounceAt = 0, activateTarget = null, activateAt = 0;
 function voiceKey(v) {
   return ((v.lang || "") + " " + (v.name || "")).toLowerCase().replace(/_/g, "-");
 }
@@ -600,10 +635,52 @@ function levelIndex(lv) {
   return isNaN(n) ? 0 : Math.min(5, Math.max(0, n));
 }
 function ensureAudio() {
-  if (navigator.audioSession) { try { navigator.audioSession.type = "playback"; } catch (err) {} }
-  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-  if (ctx.state === "suspended") ctx.resume();
-  return ctx;
+  try {
+    if (navigator.audioSession) {
+      try { navigator.audioSession.type = "playback"; } catch (err) {}
+    }
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 1;
+      masterGain.connect(ctx.destination);
+    }
+    if (ctx.state === "suspended" || ctx.state === "interrupted") {
+      try { ctx.resume(); } catch (err) {}
+    }
+    return ctx;
+  } catch (err) {
+    return null;
+  }
+}
+function withAudio(fn) {
+  // iOS/Safari：必须等 resume 完成后再排程，否则音高会被静默丢掉，只剩人声
+  const c = ensureAudio();
+  if (!c) return;
+  const run = function () {
+    try {
+      if (masterGain) masterGain.gain.value = 1;
+      fn(c);
+    } catch (err) {}
+  };
+  if (c.state === "running") {
+    run();
+    return;
+  }
+  try {
+    const p = c.resume();
+    if (p && typeof p.then === "function") {
+      p.then(function () { run(); }).catch(function () { run(); });
+    } else {
+      run();
+    }
+  } catch (err) {
+    run();
+  }
+}
+function audioOut(c) {
+  // 同时接到 master 与 destination，避免单链路静音
+  return masterGain || c.destination;
 }
 function stopTones() {
   if (!ctx) { liveOsc = []; return; }
@@ -611,62 +688,472 @@ function stopTones() {
   liveOsc.forEach(function (o) {
     try {
       if (o._gain) {
+        const cur = Math.max(o._gain.gain.value, 0.0001);
         o._gain.gain.cancelScheduledValues(t);
-        o._gain.gain.setValueAtTime(Math.max(o._gain.gain.value, 0.0001), t);
-        o._gain.gain.linearRampToValueAtTime(0, t + 0.05);
+        o._gain.gain.setValueAtTime(cur, t);
+        o._gain.gain.linearRampToValueAtTime(0.0001, t + 0.02);
       }
-      o.stop(t + 0.06);
+      o.stop(t + 0.03);
     } catch (err) {}
   });
   liveOsc = [];
 }
 function playTone(lv) {
-  const c = ensureAudio(); if (!c) return;
-  if (c.state === "suspended") c.resume();
-  stopTones();
-  const i = levelIndex(lv);
-  const f = F[i] || 523.25, t0 = c.currentTime, g0 = 0.32 * (LOUD[i] || 1);
-  [[1, 1], [2, 0.22], [3, 0.1], [4, 0.05]].forEach(function (h) {
+  withAudio(function (c) {
+    stopTones();
+    const i = levelIndex(lv);
+    const f = F[i] || 523.25;
+    const t0 = c.currentTime + 0.003;
+    // 各层音量接近，避免时大时小；只走 destination 一路
+    const amp = Math.min(0.48, 0.42 * (LOUD[i] || 1));
     const o = c.createOscillator(), g = c.createGain();
-    const amp = Math.min(0.7, g0 * h[1]);
     o.type = "sine";
-    o.frequency.setValueAtTime(f * h[0], t0);
+    o.frequency.setValueAtTime(f, t0);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(amp, t0 + ATT);
-    g.gain.setValueAtTime(amp, t0 + DUR - REL);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + DUR);
-    o.connect(g); g.connect(c.destination);
+    g.gain.linearRampToValueAtTime(amp, t0 + ATT);
+    g.gain.linearRampToValueAtTime(amp * 0.9, t0 + DUR - REL);
+    g.gain.linearRampToValueAtTime(0.0001, t0 + DUR);
+    o.connect(g);
+    g.connect(c.destination);
     o._gain = g;
-    o.start(t0); o.stop(t0 + DUR + 0.02);
+    o.start(t0);
+    o.stop(t0 + DUR + 0.04);
     liveOsc.push(o);
   });
 }
-function elementFromTouch(t) {
-  hit.style.pointerEvents = "none";
-  const el = document.elementFromPoint(t.clientX, t.clientY);
-  hit.style.pointerEvents = "auto";
-  return el && el.closest ? el.closest(".sim-el") : null;
+function playEarcon(kind) {
+  // 仅语音条件（C0）完全静音耳标，避免「滴滴」干扰
+  if (!pitchOn) return;
+  withAudio(function (c) {
+    const t0 = c.currentTime + 0.002;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = "sine";
+    const map = {
+      leave: [210, 0.08, 0.05],
+      edge: [640, 0.06, 0.045],
+      hpan: [420, 0.05, 0.04],
+      vpan: [310, 0.05, 0.04],
+      step: [500, 0.045, 0.04]
+    };
+    const cfg = map[kind] || map.step;
+    o.frequency.setValueAtTime(cfg[0], t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(cfg[2], t0 + 0.01);
+    g.gain.linearRampToValueAtTime(0.0001, t0 + cfg[1]);
+    o.connect(g);
+    g.connect(c.destination);
+    o.start(t0);
+    o.stop(t0 + cfg[1] + 0.03);
+  });
 }
-function explore(t) {
-  if (!ready) return;
-  const cell = elementFromTouch(t);
+function speakCue(txt) {
+  // 短提示用稍慢语速，避免和内容播报糊在一起
+  speak(txt, Math.min(GUIDE_RATE + 0.4, 2.6));
+}
+function regionOf(el) {
+  if (!el) return { id: "", name: "", hint: "" };
+  if (el.closest && el.closest(".tabs")) return { id: "tabs", name: "频道栏", hint: "这里左右滑有更多频道" };
+  if (el.closest && el.closest(".search")) return { id: "search", name: "搜索栏", hint: "" };
+  if (el.closest && el.closest("#icons")) return { id: "icons", name: "快捷入口", hint: "这里左右滑可翻页" };
+  if (el.closest && el.closest(".promo")) return { id: "promo", name: "活动区", hint: "" };
+  if (el.closest && el.closest("#seckill")) return { id: "seckill", name: "限时秒杀", hint: "这里左右滑有更多秒杀商品" };
+  if (el.closest && el.closest("#feed")) return { id: "feed", name: "商品列表", hint: "这里上下滑可看更多商品" };
+  if (el.closest && (el.closest("#tabbar") || el.classList.contains("nav"))) return { id: "nav", name: "底部导航", hint: "" };
+  if (el.closest && el.closest("#coupon")) return { id: "coupon", name: "优惠条", hint: "" };
+  return { id: "page", name: "页面", hint: "页面可上翻下翻" };
+}
+function panMeta(axis) {
+  if (axis === "tabs") return { el: tabs, dir: "h", say: "频道栏" };
+  if (axis === "icons") return { el: icons, dir: "h", say: "快捷入口" };
+  if (axis === "seckill") return { el: seckill, dir: "h", say: "限时秒杀" };
+  return { el: page, dir: "v", say: "商品页面" };
+}
+function panDirHint(dir, dx, dy) {
+  // 按手指滑动方向报：上翻/下翻、左翻/右翻
+  if (dir === "h") return dx > 0 ? "右翻" : "左翻";
+  return dy > 0 ? "下翻" : "上翻";
+}
+function panDirLabel(moved) {
+  const delta = moved.after - moved.before;
+  if (Math.abs(delta) < 0.5) return "";
+  if (moved.dir === "h") return delta > 0 ? "右翻" : "左翻";
+  return delta > 0 ? "下翻" : "上翻";
+}
+function scrollEdge(el, dir) {
+  if (!el) return "";
+  if (dir === "h") {
+    if (el.scrollLeft <= 2) return "start";
+    if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 3) return "end";
+  } else {
+    if (el.scrollTop <= 2) return "start";
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 3) return "end";
+  }
+  return "";
+}
+function announceEdge(dir) {
+  const now = Date.now();
+  if (now - edgeSpeakAt < 900) return;
+  edgeSpeakAt = now;
+  playEarcon("edge");
+  speakCue(dir === "start" ? "到头了" : "到尾了");
+}
+function pointInRect(x, y, r, pad) {
+  pad = pad || 0;
+  return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
+}
+function nearestSimEl(x, y, root, radius) {
+  const list = (root || document).querySelectorAll(".sim-el[data-sp]");
+  let best = null, bestDist = radius;
+  for (let i = 0; i < list.length; i++) {
+    const el = list[i];
+    const r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) continue;
+    const cx = Math.max(r.left, Math.min(x, r.right));
+    const cy = Math.max(r.top, Math.min(y, r.bottom));
+    const d = Math.hypot(x - cx, y - cy);
+    if (d <= bestDist) {
+      bestDist = d;
+      best = el;
+    }
+  }
+  return best;
+}
+function rawElementAt(x, y) {
+  hit.style.pointerEvents = "none";
+  const el = document.elementFromPoint(x, y);
+  hit.style.pointerEvents = "auto";
+  return el;
+}
+function elementFromTouch(t) {
+  return resolveHit(t.clientX, t.clientY);
+}
+function resolveHit(x, y) {
+  // 搜索栏/频道置顶区优先，避免下方图片盖住后误点
+  const head = document.querySelector(".head");
+  if (head) {
+    const hr = head.getBoundingClientRect();
+    if (pointInRect(x, y, hr, 6)) {
+      const raw = rawElementAt(x, y);
+      let cell = raw && raw.closest ? raw.closest(".head .sim-el") : null;
+      if (!cell) cell = nearestSimEl(x, y, head, HIT_RADIUS);
+      if (cell) return cell;
+    }
+  }
+  // 底部优惠条+导航连成一体：落在底栏区域时不穿透到后面的商品
+  const dock = document.getElementById("bottom-dock");
+  if (dock) {
+    const dr = dock.getBoundingClientRect();
+    if (pointInRect(x, y, dr, 2)) {
+      const raw = rawElementAt(x, y);
+      let cell = raw && raw.closest ? raw.closest("#bottom-dock .sim-el") : null;
+      if (!cell) cell = nearestSimEl(x, y, dock, HIT_RADIUS);
+      return cell;
+    }
+  }
+  const raw = rawElementAt(x, y);
+  let cell = raw && raw.closest ? raw.closest(".sim-el") : null;
+  if (head && cell && !head.contains(cell)) {
+    const hr = head.getBoundingClientRect();
+    if (y <= hr.bottom + 2) {
+      const inHead = nearestSimEl(x, y, head, HIT_RADIUS);
+      if (inHead) return inHead;
+    }
+  }
+  if (cell && cell.closest && cell.closest("#page")) {
+    // 若实际落在底栏高度内，仍归到底栏，防止空隙误点商品
+    if (dock) {
+      const dr = dock.getBoundingClientRect();
+      if (y >= dr.top - 2) {
+        return nearestSimEl(x, y, dock, HIT_RADIUS);
+      }
+    }
+  }
+  if (cell) return cell;
+  return nearestSimEl(x, y, document, HIT_RADIUS);
+}
+function rememberActivateTarget(cell) {
+  if (!cell) return;
+  activateTarget = cell;
+  activateAt = Date.now();
+}
+function resolveActivateTarget(touch) {
+  const sticky = activateTarget || lastFocusEl || document.querySelector(".sim-el.on");
+  if (sticky && Date.now() - activateAt < ACTIVATE_SLACK_MS) return sticky;
+  if (sticky && lastId) return sticky;
+  if (touch) return resolveHit(touch.clientX, touch.clientY);
+  return sticky;
+}
+function focusables() {
+  return Array.prototype.slice.call(document.querySelectorAll(".sim-el")).filter(function (el) {
+    if (!el.dataset || !el.dataset.sp) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) return false;
+    if (r.bottom <= 8 || r.top >= window.innerHeight - 8) return false;
+    if (r.right <= 8 || r.left >= window.innerWidth - 8) return false;
+    // 频道 / 秒杀横条：只保留视口内真正看得见的项，避免轻扫卡在一长串里
+    if (el.classList.contains("tab") && tabs) {
+      const rr = tabs.getBoundingClientRect();
+      const cx = (r.left + r.right) / 2;
+      if (cx < rr.left + 4 || cx > rr.right - 4) return false;
+    }
+    if (el.classList.contains("sk-item") && seckill) {
+      const rr = seckill.getBoundingClientRect();
+      const cx = (r.left + r.right) / 2;
+      if (cx < rr.left + 4 || cx > rr.right - 4) return false;
+    }
+    if (el.classList.contains("icon") && icons) {
+      const rr = icons.getBoundingClientRect();
+      const cx = (r.left + r.right) / 2;
+      if (cx < rr.left + 4 || cx > rr.right - 4) return false;
+    }
+    return true;
+  });
+}
+function shortProductName(sp) {
+  if (!sp) return "";
+  return String(sp).split("，")[0] || String(sp);
+}
+function productContext(el) {
+  if (!el || !el.closest) return null;
+  const sk = el.closest(".sk-item");
+  if (sk) {
+    return { key: "sk-" + (sk.dataset.id || sk.dataset.sp || ""), region: "限时秒杀", product: sk.dataset.sp || "", host: sk };
+  }
+  const card = el.closest(".card");
+  if (card) {
+    return { key: "card-" + (card.dataset.id || card.dataset.sp || ""), region: "商品列表", product: card.dataset.sp || "", host: card };
+  }
+  const pcol = el.closest(".pcol");
+  if (pcol) {
+    const title = pcol.querySelector(".pt");
+    const name = (title && title.dataset.sp) || pcol.dataset.sp || "";
+    return { key: "promo-" + name, region: "活动区", product: name, host: pcol };
+  }
+  return null;
+}
+function locatePhrase(cell, opts) {
+  // 单指触探：报板块 + 商品名（不报第几件）；子控件补「现在在…」
+  opts = opts || {};
+  const reg = regionOf(cell);
+  const ctx = productContext(cell);
+  const parts = [];
+  const regionChanged = opts.forceRegion || (reg.id && reg.id !== lastRegion);
+  const productChanged = !!(ctx && ctx.key !== lastProductKey);
+  if (regionChanged) parts.push(reg.name);
+  if (ctx) {
+    if (regionChanged || productChanged || opts.forceRegion || opts.step) {
+      parts.push(shortProductName(ctx.product) || ctx.product);
+    }
+    if (ctx.host !== cell) {
+      const part = cell.dataset.sp || "";
+      if (part && part !== ctx.product && part !== shortProductName(ctx.product)) {
+        parts.push("现在在" + shortProductName(part));
+      }
+    }
+  } else {
+    parts.push(cell.dataset.sp || "");
+  }
+  if (!parts.length) parts.push(cell.dataset.sp || "未知位置");
+  return { say: parts.join("。"), reg: reg, ctx: ctx, regionChanged: regionChanged };
+}
+function panLocateFromCell(cell) {
+  // 翻页定位：板块 + 该项原本信息（不加第几件）
+  if (!cell || !cell.dataset || !cell.dataset.sp) return null;
+  const reg = regionOf(cell);
+  const ctx = productContext(cell);
+  const parts = [];
+  if (reg && reg.name) parts.push(reg.name);
+  if (ctx && ctx.product) {
+    const name = shortProductName(ctx.product) || ctx.product;
+    if (name && parts.indexOf(name) === -1) parts.push(name);
+    if (ctx.host !== cell) {
+      const part = shortProductName(cell.dataset.sp) || cell.dataset.sp;
+      if (part && part !== name) parts.push("现在在" + part);
+    }
+  } else {
+    parts.push(cell.dataset.sp);
+  }
+  return {
+    key: "pan-" + (ctx ? ctx.key : (reg.id + "-" + (cell.dataset.id || cell.dataset.sp))),
+    say: parts.join("。"),
+    cell: cell,
+    reg: reg
+  };
+}
+function panContentAtViewport() {
+  // 优先按双指触点取位；没有触点时再扫视口
+  const pt = pan;
+  if (pt) {
+    if (panAxis === "tabs" && tabs && inRect(tabs, pt.y)) {
+      return panLocateFromCell(nearestSimEl(pt.x, pt.y, tabs, 80) || resolveHit(pt.x, pt.y));
+    }
+    if (panAxis === "icons" && icons && inRect(icons, pt.y)) {
+      return panLocateFromCell(nearestSimEl(pt.x, pt.y, icons, 80) || resolveHit(pt.x, pt.y));
+    }
+    if (panAxis === "seckill" && seckill && inRect(seckill, pt.y)) {
+      return panLocateFromCell(nearestSimEl(pt.x, pt.y, seckill, 80) || resolveHit(pt.x, pt.y));
+    }
+    // 页面上下翻：报双指正下方的商品，不报已划过的顶缘内容
+    const under = resolveHit(pt.x, pt.y);
+    if (under) {
+      const host = under.closest(".card") || under.closest(".sk-item") || under.closest(".pcol") || under;
+      const target = (host.classList && host.classList.contains("sim-el") && host.dataset.sp)
+        ? host
+        : (host.querySelector && host.querySelector(".sim-el[data-sp]")) || under;
+      return panLocateFromCell(target);
+    }
+  }
+  if (panAxis === "seckill" && seckill) {
+    const rr = seckill.getBoundingClientRect();
+    const mid = (rr.left + rr.right) / 2;
+    let best = null, bestDist = 1e9;
+    Array.prototype.forEach.call(seckill.querySelectorAll(".sk-item"), function (sk) {
+      const r = sk.getBoundingClientRect();
+      if (r.right < rr.left || r.left > rr.right) return;
+      const d = Math.abs((r.left + r.right) / 2 - mid);
+      if (d < bestDist) { bestDist = d; best = sk; }
+    });
+    return panLocateFromCell(best);
+  }
+  if (panAxis === "tabs" && tabs) {
+    const rr = tabs.getBoundingClientRect();
+    const mid = (rr.left + rr.right) / 2;
+    let best = null, bestDist = 1e9;
+    Array.prototype.forEach.call(tabs.querySelectorAll(".tab"), function (tab) {
+      const r = tab.getBoundingClientRect();
+      const d = Math.abs((r.left + r.right) / 2 - mid);
+      if (d < bestDist) { bestDist = d; best = tab; }
+    });
+    return panLocateFromCell(best);
+  }
+  if (panAxis === "icons" && icons) {
+    const rr = icons.getBoundingClientRect();
+    const midX = (rr.left + rr.right) / 2;
+    const midY = (rr.top + rr.bottom) / 2;
+    let best = null, bestDist = 1e9;
+    Array.prototype.forEach.call(icons.querySelectorAll(".icon"), function (ic) {
+      const r = ic.getBoundingClientRect();
+      if (r.right < rr.left || r.left > rr.right) return;
+      const d = Math.hypot((r.left + r.right) / 2 - midX, (r.top + r.bottom) / 2 - midY);
+      if (d < bestDist) { bestDist = d; best = ic; }
+    });
+    if (best) return panLocateFromCell(best);
+  }
+  return null;
+}
+function maybeAnnouncePanContent(force, dirLabel) {
+  const now = Date.now();
+  if (!force && now - lastPanAnnounceAt < 260) return;
+  const info = panContentAtViewport();
+  if (!info || !info.say) return;
+  const say = dirLabel ? (dirLabel + "。" + info.say) : info.say;
+  if (!force && say === lastPanAnnounceKey) return;
+  lastPanAnnounceKey = say;
+  lastPanAnnounceAt = now;
+  if (info.reg && info.reg.id) lastRegion = info.reg.id;
+  speakCue(say);
+  if (info.cell) {
+    document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
+    info.cell.classList.add("on");
+    lastFocusEl = info.cell;
+    lastId = info.cell.dataset.id || lastId;
+    rememberActivateTarget(info.cell);
+  }
+  if (session && trial && !trial.phase) {
+    session.events.push({ t: Date.now() - session.t0, type: "pan_locate", axis: panAxis, dir: dirLabel || "", say: say });
+  }
+}
+function announceNode(cell, opts) {
+  // 触探：报原本信息；左右轻扫时补板块。C0 不播耳标。
+  opts = opts || {};
+  if (!cell) return;
+  const reg = regionOf(cell);
+  lastRegion = reg.id || lastRegion;
+  const ctx = productContext(cell);
+  if (ctx) lastProductKey = ctx.key;
+  else lastProductKey = "";
+  let say = cell.dataset.sp || "";
+  if (opts.step || opts.forceRegion) {
+    const loc = locatePhrase(cell, { forceRegion: true, step: !!opts.step });
+    say = loc.say || say;
+  }
+  if (!say) return;
+  if (pitchOn) {
+    playTone(levelIndex(cell.dataset.lv));
+    setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, (DUR + DLY) * 1000);
+  } else {
+    setTimeout(function () { if (lastId === cell.dataset.id) speak(say); }, 50);
+  }
+}
+function setRecallVisible(on) {
+  // 不再显示黑色重听条，避免挡住搜索栏；重听只保留三指轻点
+  if (!recallBtn) return;
+  recallBtn.classList.remove("show");
+}
+function repeatTrialPrompt() {
+  if (tryMode) {
+    playEarcon("step");
+    speakCue("这就是重听题目的手势。正式做题时，三指轻点会再把题目慢慢说一遍。");
+    return;
+  }
+  if (!trial || trial.phase) {
+    speakCue("现在没有进行中的题目");
+    return;
+  }
+  if (!ready) {
+    speakCue("题目还没开始");
+    return;
+  }
+  speechSynthesis.cancel();
+  stopTones();
+  playEarcon("step");
+  const kind = trial.practice ? "练习题" : "本题";
+  const say = kind + "。" + (trial.title || "") + "。" + (trial.say || "") + "。找到以后，在那一项上快速点两下。若再忘记，三指轻点屏幕重听本题。";
+  speak(say, GUIDE_RATE);
+  if (session) {
+    session.events.push({ t: Date.now() - session.t0, type: "repeat_prompt" });
+    if (trial && !trial.phase) trial.n_repeat = (trial.n_repeat || 0) + 1;
+  }
+}
+function focusElement(cell, opts) {
+  if (!cell || !ready) return;
+  opts = opts || {};
   document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
-  if (!cell) { lastId = null; speechSynthesis.cancel(); return; }
   cell.classList.add("on");
-  if (cell.dataset.id === lastId) return;
+  lastFocusEl = cell;
+  rememberActivateTarget(cell);
+  if (cell.dataset.id === lastId && !opts.step && !opts.forceRegion) return;
   lastId = cell.dataset.id;
   speechSynthesis.cancel();
   if (trial && !trial.phase) {
+    const id = cell.dataset.id;
+    const lv = levelIndex(cell.dataset.lv);
+    const now = Date.now();
+    if (!trial.level_ms) trial.level_ms = [0, 0, 0, 0, 0, 0];
+    if (!trial.level_counts) trial.level_counts = [0, 0, 0, 0, 0, 0];
+    if (!trial.levels) trial.levels = {};
+    if (trial._last_lv != null && trial._last_lv_t != null) {
+      const dt = Math.max(0, now - trial._last_lv_t);
+      trial.level_ms[trial._last_lv] = (trial.level_ms[trial._last_lv] || 0) + dt;
+    }
+    trial._last_lv = lv;
+    trial._last_lv_t = now;
     trial.n_focus += 1;
-    trial.levels[cell.dataset.lv] = 1;
-    session.events.push({ t: Date.now() - session.t0, type: "enter", id: cell.dataset.id, lv: cell.dataset.lv, sp: cell.dataset.sp });
+    trial.levels[String(lv)] = 1;
+    trial.level_counts[lv] = (trial.level_counts[lv] || 0) + 1;
+    if (!trial.path_ids) trial.path_ids = [];
+    trial.path_ids.push(id);
+    if (!trial.seen_ids) trial.seen_ids = {};
+    trial.seen_ids[id] = 1;
+    const tid = focusTid(cell);
+    if (tid && tid === trial.tid && trial.t_first_hit == null) {
+      trial.t_first_hit = now - (trial.t0 || now);
+      trial.focuses_to_first_hit = trial.n_focus;
+      if (session) session.events.push({ t: now - session.t0, type: "first_hit", id: id, lv: cell.dataset.lv, tid: tid });
+    }
+    if (session) session.events.push({ t: now - session.t0, type: "enter", id: id, lv: cell.dataset.lv, sp: cell.dataset.sp, region: regionOf(cell).id });
   }
-  if (pitchOn) {
-    playTone(levelIndex(cell.dataset.lv));
-    setTimeout(function () { if (lastId === cell.dataset.id) speak(cell.dataset.sp); }, (DUR + DLY) * 1000);
-  } else {
-    setTimeout(function () { if (lastId === cell.dataset.id) speak(cell.dataset.sp); }, 80);
-  }
+  announceNode(cell, opts);
   if (tryMode === "explore") {
     tutSeen[cell.dataset.id] = 1;
     if (Object.keys(tutSeen).length >= 3) finishTry("好");
@@ -675,6 +1162,54 @@ function explore(t) {
     tutSeen[cell.dataset.id] = 1;
     maybeFinishAdapt();
   }
+}
+function stepFocus(dir) {
+  const list = focusables();
+  if (!list.length) return;
+  let idx = -1;
+  if (lastId) {
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].dataset.id === lastId) { idx = i; break; }
+    }
+  }
+  let next = idx + dir;
+  if (next < 0) { playEarcon("edge"); speakCue("已到第一项"); next = 0; }
+  else if (next >= list.length) { playEarcon("edge"); speakCue("已到最后一项"); next = list.length - 1; }
+  focusElement(list[next], { step: true, forceRegion: true });
+  if (session && trial && !trial.phase) {
+    session.events.push({ t: Date.now() - session.t0, type: "step", dir: dir, id: list[next].dataset.id });
+  }
+}
+function leaveFence() {
+  // 双击容错窗内不丢掉激活目标，避免抬手空隙被当成离开
+  const keepActivate = activateTarget && (Date.now() - activateAt < ACTIVATE_SLACK_MS);
+  if (lastId == null && !lastFocusEl && !keepActivate) return;
+  if (!keepActivate) {
+    lastId = null;
+    lastFocusEl = null;
+    activateTarget = null;
+  }
+  lastRegion = "";
+  lastProductKey = "";
+  if (!keepActivate) {
+    document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
+  }
+  speechSynthesis.cancel();
+  if (keepActivate) return;
+  const now = Date.now();
+  if (now - leaveSpeakAt < 1200) { playEarcon("leave"); return; }
+  leaveSpeakAt = now;
+  playEarcon("leave");
+  speakCue("已离开可点内容");
+  if (session && trial && !trial.phase) {
+    session.events.push({ t: Date.now() - session.t0, type: "leave" });
+  }
+}
+function explore(t) {
+  if (!ready) return;
+  const cell = elementFromTouch(t);
+  if (!cell) { leaveFence(); return; }
+  focusElement(cell);
 }
 function midpoint(touches) {
   let x = 0, y = 0;
@@ -695,46 +1230,168 @@ function axisForY(y) {
   if (inRect(seckill, y)) return "seckill";
   return "page";
 }
+function applyPanDelta(dx, dy) {
+  // 横条区域也可上下翻页，避免卡在频道/秒杀里出不去
+  const absX = Math.abs(dx), absY = Math.abs(dy);
+  const wantVertical = absY > absX * 1.05;
+  const wantHorizontal = absX > absY * 1.05;
+  if (panAxis === "tabs" || panAxis === "icons" || panAxis === "seckill") {
+    if (wantVertical) {
+      const before = page.scrollTop;
+      page.scrollTop += dy;
+      return { el: page, dir: "v", before: before, after: page.scrollTop, movedAxis: "page" };
+    }
+    const el = panMeta(panAxis).el;
+    const before = el.scrollLeft;
+    el.scrollLeft += dx;
+    return { el: el, dir: "h", before: before, after: el.scrollLeft, movedAxis: panAxis };
+  }
+  // 页面默认上下；明显左右时，若手指落在横条上可临时左右翻
+  if (wantHorizontal) {
+    const y = pan ? pan.y : 0;
+    const local = axisForY(y);
+    if (local === "tabs" || local === "icons" || local === "seckill") {
+      const el = panMeta(local).el;
+      const before = el.scrollLeft;
+      el.scrollLeft += dx;
+      return { el: el, dir: "h", before: before, after: el.scrollLeft, movedAxis: local };
+    }
+  }
+  const before = page.scrollTop;
+  page.scrollTop += dy;
+  return { el: page, dir: "v", before: before, after: page.scrollTop, movedAxis: "page" };
+}
 function onTouchStart(e) {
   e.preventDefault();
+  ensureAudio();
   if (!ready) return;
-  if (e.touches.length >= 2) {
-    pan = midpoint(e.touches);
-    panAxis = axisForY(pan.y);
+  if (e.touches.length >= 3) {
+    pan = null;
+    gesture = { mode: "tri", t: Date.now(), x: midpoint(e.touches).x, y: midpoint(e.touches).y };
     speechSynthesis.cancel();
     return;
   }
+  if (e.touches.length >= 2) {
+    pan = midpoint(e.touches);
+    panAxis = axisForY(pan.y);
+    panAnnounced = false;
+    lastPanAnnounceKey = "";
+    speechSynthesis.cancel();
+    gesture = null;
+    const meta = panMeta(panAxis);
+    playEarcon(meta.dir === "h" ? "hpan" : "vpan");
+    // 起手先报当前位置；不写入节流时间，避免马上挡住「上翻/下翻」
+    const info = panContentAtViewport();
+    const say = info && info.say ? info.say : meta.say;
+    speakCue(say);
+    if (info) {
+      lastPanAnnounceKey = info.say;
+      lastPanAnnounceAt = 0;
+      if (info.reg && info.reg.id) lastRegion = info.reg.id;
+      if (info.cell) {
+        document.querySelectorAll(".sim-el.on").forEach(function (n) { n.classList.remove("on"); });
+        info.cell.classList.add("on");
+        lastFocusEl = info.cell;
+        lastId = info.cell.dataset.id || lastId;
+        rememberActivateTarget(info.cell);
+      }
+    }
+    panAnnounced = true;
+    if (session && trial && !trial.phase) {
+      session.events.push({ t: Date.now() - session.t0, type: "pan_start", axis: panAxis, say: say });
+    }
+    return;
+  }
+  const t0 = e.changedTouches[0];
+  gesture = { x: t0.clientX, y: t0.clientY, t: Date.now(), mode: "", lx: t0.clientX, ly: t0.clientY };
   const now = Date.now();
-  if (now - lastTap < 380 && lastId) {
-    const cur = document.querySelector(".sim-el.on");
+  // 双击：优先选中刚才听到的那一项，容错落点偏移
+  if (now - lastTap < ACTIVATE_SLACK_MS && (activateTarget || lastFocusEl || lastId)) {
+    const cur = resolveActivateTarget(t0);
     lastTap = 0;
+    gesture = null;
     onActivate(cur);
     return;
   }
-  lastTap = now; explore(e.changedTouches[0]);
+  lastTap = now;
+  explore(t0);
 }
 function onTouchMove(e) {
   e.preventDefault();
   if (!ready) return;
+  if (gesture && gesture.mode === "tri") return;
+  if (e.touches.length >= 3) return;
   if (e.touches.length >= 2) {
     const p = midpoint(e.touches);
     if (pan) {
       const dx = pan.x - p.x, dy = pan.y - p.y;
-      if (panAxis === "tabs") tabs.scrollLeft += dx;
-      else if (panAxis === "icons") icons.scrollLeft += dx;
-      else if (panAxis === "seckill") seckill.scrollLeft += dx;
-      else page.scrollTop += dy;
+      const moved = applyPanDelta(dx, dy);
+      pan = p;
+      if (Math.abs(moved.after - moved.before) < 0.5) {
+        const edge = scrollEdge(moved.el, moved.dir);
+        if (edge) announceEdge(edge);
+      } else if (Math.abs(moved.after - moved.before) >= 1) {
+        if (moved.movedAxis === "page") panAxis = "page";
+        else if (moved.movedAxis) panAxis = moved.movedAxis;
+        const dirSay = panDirLabel(moved) || panDirHint(moved.dir, dx, dy);
+        maybeAnnouncePanContent(false, dirSay);
+      }
       if (tryMode === "pan") {
         panTravel += Math.abs(dx) + Math.abs(dy);
         if (panTravel >= PAN_MIN_PX) finishTry("对，这就是翻页");
       }
+    } else {
+      pan = p;
     }
-    pan = p;
     return;
   }
-  pan = null; explore(e.changedTouches[0]);
+  pan = null;
+  const t = e.changedTouches[0];
+  if (gesture) {
+    gesture.lx = t.clientX;
+    gesture.ly = t.clientY;
+    const dx = t.clientX - gesture.x;
+    const dy = t.clientY - gesture.y;
+    const dist = Math.hypot(dx, dy);
+    if (!gesture.mode && dist > 28) {
+      const dt = Date.now() - gesture.t;
+      gesture.mode = (dt < 320 && Math.abs(dx) > Math.abs(dy) * 1.55) ? "flick" : "explore";
+    }
+    // 轻扫中途若改成明显上下滑，解除锁定，允许摸到其他项
+    if (gesture.mode === "flick" && Math.abs(dy) > Math.abs(dx) * 1.2 && Math.abs(dy) > 36) {
+      gesture.mode = "explore";
+    }
+    if (gesture.mode === "flick") return;
+  }
+  explore(t);
 }
-function onTouchEnd(e) { e.preventDefault(); if (e.touches.length < 2) pan = null; }
+function onTouchEnd(e) {
+  e.preventDefault();
+  if (e.touches.length < 2) pan = null;
+  if (!ready) { gesture = null; return; }
+  if (gesture && gesture.mode === "tri") {
+    if (e.touches.length === 0) {
+      const dt = Date.now() - gesture.t;
+      gesture = null;
+      if (dt < 800) repeatTrialPrompt();
+    }
+    return;
+  }
+  if (!gesture || e.touches.length >= 1) {
+    if (e.touches.length === 0) gesture = null;
+    return;
+  }
+  const t = e.changedTouches[0];
+  const dx = (t ? t.clientX : gesture.lx) - gesture.x;
+  const dy = (t ? t.clientY : gesture.ly) - gesture.y;
+  const dt = Date.now() - gesture.t;
+  const dist = Math.hypot(dx, dy);
+  const isFlick = gesture.mode === "flick" || (dt < 380 && dist >= 42 && Math.abs(dx) > Math.abs(dy) * 1.45);
+  gesture = null;
+  if (!isFlick) return;
+  // VoiceOver / TalkBack：向右滑 = 下一项，向左滑 = 上一项
+  stepFocus(dx > 0 ? 1 : -1);
+}
 function focusTid(el) {
   if (!el) return "";
   if (el.dataset.tid) return el.dataset.tid;
@@ -815,6 +1472,7 @@ function hideGuide() {
   guide.onclick = null;
   guide.ontouchend = null;
   guideHandler = null;
+  document.body.classList.remove("guide-blocking");
 }
 function clearDemo() {
   document.querySelectorAll(".sim-el.demo, .sim-el.on").forEach(function (el) {
@@ -833,6 +1491,7 @@ function highlightDemo(sel) {
 }
 function showGuide(opt) {
   hit.style.display = "none";
+  setRecallVisible(false);
   taskbar.classList.remove("show");
   tryMode = "";
   ready = false;
@@ -841,7 +1500,9 @@ function showGuide(opt) {
   if (opt.ghost) {
     guide.classList.add("ghost");
     guide.innerHTML = "";
+    document.body.classList.remove("guide-blocking");
   } else {
+    document.body.classList.add("guide-blocking");
     var html = "";
     if (opt.kicker) html += '<div class="k">' + opt.kicker + "</div>";
     if (opt.title) html += "<h2>" + opt.title + "</h2>";
@@ -895,7 +1556,20 @@ function bindHit() {
   hit.addEventListener("touchcancel", onTouchEnd, { passive: false });
   hit.addEventListener("mousemove", function (e) { if (armed && ready) explore(e); });
 }
+if (recallBtn) {
+  recallBtn.addEventListener("click", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    repeatTrialPrompt();
+  });
+  recallBtn.addEventListener("touchend", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    repeatTrialPrompt();
+  }, { passive: false });
+}
 function onActivate(cur) {
+  cur = cur || resolveActivateTarget(null);
   speechSynthesis.cancel();
   if (tryMode === "activate") {
     finishTry("对，这就是选中");
@@ -903,12 +1577,14 @@ function onActivate(cur) {
   }
   if (tryMode === "explore" || tryMode === "adapt" || tryMode === "pan") {
     if (pitchOn && cur) playTone(levelIndex(cur.dataset.lv));
-    speak("选中，" + (cur ? cur.dataset.sp : ""), GUIDE_RATE);
+    const where = cur ? (cur.dataset.sp || "") : "";
+    speak("选中。" + where, GUIDE_RATE);
     return;
   }
   if (!trial) {
     if (pitchOn) playTone(cur ? levelIndex(cur.dataset.lv) : 0);
-    setTimeout(function () { speak("选中，" + (cur ? cur.dataset.sp : "")); }, pitchOn ? (DUR + DLY) * 1000 : 80);
+    const where = cur ? (cur.dataset.sp || "") : "";
+    setTimeout(function () { speak("选中。" + where); }, pitchOn ? (DUR + DLY) * 1000 : 80);
     return;
   }
   const tid = focusTid(cur);
@@ -917,9 +1593,34 @@ function onActivate(cur) {
     finishTrial("success");
     return;
   }
+  // 容错：点在目标附近（同卡片/秒杀项/搜索栏）也算命中
+  if (cur && trial.tid) {
+    const near = resolveHitNearTarget(cur, trial.tid);
+    if (near) {
+      finishTrial("success");
+      return;
+    }
+  }
   trial.n_errors += 1;
   if (pitchOn && cur) playTone(levelIndex(cur.dataset.lv));
-  speak("不对，请继续找", GUIDE_RATE);
+  const where = cur ? (cur.dataset.sp || "未知位置") : "未知位置";
+  speak("不对，这里是" + where + "。请继续找。三指轻点可重听题目。", GUIDE_RATE);
+}
+function resolveHitNearTarget(cur, tid) {
+  if (!cur || !tid) return false;
+  if (focusTid(cur) === tid) return true;
+  const goal = document.querySelector('[data-tid="' + tid + '"]');
+  if (!goal) return false;
+  const gr = goal.getBoundingClientRect();
+  const cr = cur.getBoundingClientRect();
+  const gx = (gr.left + gr.right) / 2, gy = (gr.top + gr.bottom) / 2;
+  const cx = (cr.left + cr.right) / 2, cy = (cr.top + cr.bottom) / 2;
+  if (Math.hypot(gx - cx, gy - cy) <= HIT_RADIUS * 1.35) return true;
+  // 同一商品卡 / 同一秒杀项 / 同一搜索条内也算
+  const sameCard = cur.closest(".card") && goal.closest(".card") && cur.closest(".card") === goal.closest(".card");
+  const sameSk = cur.closest(".sk-item") && goal.closest(".sk-item") && cur.closest(".sk-item") === goal.closest(".sk-item");
+  const sameSearch = cur.closest(".search") && goal.closest(".search");
+  return !!(sameCard || sameSk || sameSearch);
 }
 function isoNow(ms) {
   return new Date(ms || Date.now()).toISOString();
@@ -928,12 +1629,27 @@ function persistSession() {
   if (!session) return;
   try { localStorage.setItem("ht-session", JSON.stringify(session)); } catch (err) {}
 }
+function flushLevelMs(endedAt) {
+  if (!trial || trial._last_lv == null || trial._last_lv_t == null) return;
+  if (!trial.level_ms) trial.level_ms = [0, 0, 0, 0, 0, 0];
+  const dt = Math.max(0, endedAt - trial._last_lv_t);
+  trial.level_ms[trial._last_lv] = (trial.level_ms[trial._last_lv] || 0) + dt;
+  trial._last_lv_t = endedAt;
+}
 function snapshotTrial(result, endedAt, perfEnd) {
   const startedAt = trial.t0 || endedAt;
   const timeMs = trial.t0_perf != null ? Math.max(0, Math.round(perfEnd - trial.t0_perf)) : Math.max(0, endedAt - startedAt);
+  flushLevelMs(endedAt);
+  const pathLen = trial.n_focus || 0;
+  const nUnique = Object.keys(trial.seen_ids || {}).length;
+  const nRevisits = Math.max(0, pathLen - nUnique);
+  const pathEff = pathLen > 0 ? Math.round((nUnique / pathLen) * 10000) / 10000 : null;
+  const levelCounts = (trial.level_counts || [0, 0, 0, 0, 0, 0]).slice();
+  const levelMs = (trial.level_ms || [0, 0, 0, 0, 0, 0]).slice();
   return {
     participant_id: session.participant_id,
     session_id: session.session_id,
+    order: session.order || "",
     cond: trial.cond || "",
     practice: trial.practice ? 1 : 0,
     tid: trial.tid || "",
@@ -946,9 +1662,18 @@ function snapshotTrial(result, endedAt, perfEnd) {
     t0_ms: startedAt,
     ended_ms: endedAt,
     time_ms: timeMs,
-    n_focus: trial.n_focus || 0,
+    first_hit_ms: trial.t_first_hit == null ? null : Math.max(0, Math.round(trial.t_first_hit)),
+    focuses_to_first_hit: trial.focuses_to_first_hit == null ? null : trial.focuses_to_first_hit,
+    n_focus: pathLen,
+    n_unique: nUnique,
+    n_revisits: nRevisits,
+    path_len: pathLen,
+    path_efficiency: pathEff,
     n_errors: trial.n_errors || 0,
-    levels: trial.levels || {}
+    n_repeat: trial.n_repeat || 0,
+    levels: trial.levels || {},
+    level_counts: levelCounts,
+    level_ms: levelMs
   };
 }
 function finishTrial(result) {
@@ -960,24 +1685,45 @@ function finishTrial(result) {
   persistSession();
   ready = false;
   lastId = null;
+  lastProductKey = "";
+  setRecallVisible(false);
   trial = null;
   taskbar.classList.remove("show");
   if (result === "success") speak("正确", GUIDE_RATE);
   else if (result === "timeout") speak("时间到", GUIDE_RATE);
   setTimeout(function () { nextTrial(); }, result === "success" ? 900 : 1100);
 }
+function orderParts() {
+  const order = (session && session.order) || "C0-C1";
+  const first = order === "C1-C0" ? "C1" : "C0";
+  return { order: order, first: first, second: first === "C0" ? "C1" : "C0" };
+}
+function condDesc(cond) {
+  return cond === "C0" ? "只有语音，没有高低音" : "有高低音加语音";
+}
+function segOf(cond) {
+  const p = orderParts();
+  if (cond === p.first) return 1;
+  if (cond === p.second) return 2;
+  return 0;
+}
 function announceTrial() {
   const c0 = trial.cond === "C0";
-  const kind = trial.practice ? "练习" : (c0 ? "第一段" : "第二段");
+  const seg = segOf(trial.cond);
+  const kind = trial.practice ? "练习" : (seg === 1 ? "第一段" : "第二段");
   const condTxt = c0
     ? "这一题只能听到语音，听不到高低音。"
     : "这一题会先听到一声高低音，再听到名称。";
   showGuide({
     kicker: kind,
     title: trial.title,
-    body: [condTxt, trial.say, "找到以后，在那一项上快速点两下。点错了会说不对，可以继续找。"],
+    body: [
+      condTxt,
+      trial.say,
+      "单指慢滑会播该项原本的名称信息。双指上翻或下翻时，也会播当前项的原本信息。忘记题目：三指轻点重听。找到以后快速点两下。"
+    ],
     hint: "点屏幕任意位置开始本题",
-    say: kind + "。" + condTxt + trial.say + "找到以后快速点两下。",
+    say: kind + "。" + condTxt + trial.say + "单指慢滑会播该项原本的名称信息。双指上翻或下翻也会播原本信息。忘记题目就三指轻点重听。找到以后快速点两下。",
     next: startTrial
   });
 }
@@ -992,12 +1738,27 @@ function startTrial() {
   trial.started_at = isoNow(trial.t0);
   trial.n_focus = 0;
   trial.n_errors = 0;
+  trial.n_repeat = 0;
   trial.levels = {};
+  trial.level_counts = [0, 0, 0, 0, 0, 0];
+  trial.level_ms = [0, 0, 0, 0, 0, 0];
+  trial.path_ids = [];
+  trial.seen_ids = {};
+  trial.t_first_hit = null;
+  trial.focuses_to_first_hit = null;
+  trial._last_lv = null;
+  trial._last_lv_t = null;
   taskbar.classList.remove("show");
   bindHit();
   ready = true;
+  setRecallVisible(true);
   clearTimeout(trialTimer);
   trialTimer = setTimeout(function () { finishTrial("timeout"); }, TRIAL_MS);
+  setTimeout(function () {
+    if (ready && trial && !trial.phase) {
+      speak("开始。" + (trial.say || "") + "。三指轻点可重听题目。", GUIDE_RATE);
+    }
+  }, 350);
 }
 function beginTry(mode, pitch, then, prompt) {
   hideGuide();
@@ -1036,53 +1797,44 @@ function nextTrial() {
   trialIndex += 1;
   if (trialIndex >= trials.length) { endSession(); return; }
   trial = trials[trialIndex];
-  if (trial.phase === "brief-c0") {
+  if (trial.phase === "brief") {
+    const cond = trial.cond;
+    const c0 = cond === "C0";
+    const first = segOf(cond) === 1;
+    const title = c0 ? "查找任务，只有语音" : "查找任务，加上高低音";
+    const line = c0
+      ? "只能听到语音，听不到高低音。"
+      : "每摸到一项，会先听到一声高低音，再听到名称。";
     showGuide({
-      kicker: "第一段实验",
-      title: "查找任务，只有语音",
-      body: [
-        "接下来开始做查找实验。实验分两段。",
-        "现在是第一段：只能听到语音，听不到高低音。",
-        "请在页面上找指定的东西，找到以后快速点两下。"
-      ],
+      kicker: first ? "第一段实验" : "第二段实验",
+      title: title,
+      body: first
+        ? ["接下来开始做查找实验。实验分两段。", "现在是第一段：" + line, "请在页面上找指定的东西，找到以后快速点两下。"]
+        : ["第一段做完了。", "现在是第二段：" + line, "还是找指定的东西，找到以后快速点两下。"],
       hint: "点屏幕任意位置继续",
-      say: "接下来开始做查找实验。实验分两段。现在是第一段，只能听到语音，听不到高低音。请在页面上找指定的东西，找到以后快速点两下。点屏幕继续。",
+      say: first
+        ? ("接下来开始做查找实验。实验分两段。现在是第一段，" + line + "请在页面上找指定的东西，找到以后快速点两下。点屏幕继续。")
+        : ("第一段做完了。现在开始第二段。" + line + "还是找指定的东西，找到以后快速点两下。点屏幕继续。"),
       next: function () { nextTrial(); }
     });
     return;
   }
-  if (trial.phase === "adapt-c0") {
-    showAdapt("C0", function () { nextTrial(); });
+  if (trial.phase === "adapt") {
+    showAdapt(trial.cond, function () { nextTrial(); });
     return;
   }
   if (trial.phase === "break") {
+    const p = orderParts();
+    const doneDesc = condDesc(p.first);
+    const nextDesc = condDesc(p.second);
     showGuide({
       kicker: "第一段结束",
-      title: "只有语音的部分做完了",
-      body: ["刚才的查找题都只能听到语音，没有高低音。", "接下来第二段会加上高低音。先听一段说明，再适应一下。"],
+      title: "第一段做完了",
+      body: ["刚才第一段是：" + doneDesc + "。", "接下来第二段是：" + nextDesc + "。先听一段说明，再适应一下。"],
       hint: "点屏幕任意位置继续",
-      say: "第一段结束。刚才只能听到语音，听不到高低音。接下来第二段会加上高低音。点屏幕继续。",
+      say: "第一段结束。刚才是" + doneDesc + "。接下来第二段是" + nextDesc + "。点屏幕继续。",
       next: function () { nextTrial(); }
     });
-    return;
-  }
-  if (trial.phase === "brief-c1") {
-    showGuide({
-      kicker: "第二段实验",
-      title: "查找任务，加上高低音",
-      body: [
-        "第一段只有语音的部分做完了。",
-        "现在是第二段：每摸到一项，会先听到一声高低音，再听到名称。",
-        "还是找指定的东西，找到以后快速点两下。"
-      ],
-      hint: "点屏幕任意位置继续",
-      say: "第一段做完了。现在开始第二段。这一段每摸到一项，会先听到一声高低音，再听到名称。还是找指定的东西，找到以后快速点两下。点屏幕继续。",
-      next: function () { nextTrial(); }
-    });
-    return;
-  }
-  if (trial.phase === "adapt-c1") {
-    showAdapt("C1", function () { nextTrial(); });
     return;
   }
   announceTrial();
@@ -1116,9 +1868,9 @@ function pickExclusive(root, sel, key, store) {
 }
 function showIntake() {
   showForm({
-    say: "请研究助手填写编号和基本情况。填好后开始第一段。",
+    say: "请研究助手填写编号、基本情况，并选择实验顺序。填好后开始第一段。",
     html: '<div class="k">研究助手填写</div><h2>建档</h2>' +
-      '<p class="meta">编号和基本情况不用读给被试听。填好后点开始。</p>' +
+      '<p class="meta">编号、视力和顺序不用读给被试听。顺序用于平衡设计，后台会记录。</p>' +
       '<div class="q"><div class="ql">被试编号</div><input id="f-pid" type="text" inputmode="numeric" placeholder="例如 03" autocomplete="off"></div>' +
       '<div class="q"><div class="ql">视力</div><div class="choice" id="f-vision">' +
       '<button type="button" data-v="blind">全盲</button>' +
@@ -1127,19 +1879,28 @@ function showIntake() {
       '<button type="button" data-v="none">几乎不用</button>' +
       '<button type="button" data-v="some">会一些</button>' +
       '<button type="button" data-v="daily">每天用</button></div></div>' +
+      '<div class="q"><div class="ql">实验顺序（平衡）</div><div class="choice" id="f-order">' +
+      '<button type="button" data-v="C0-C1">C0→C1 先语音</button>' +
+      '<button type="button" data-v="C1-C0">C1→C0 先高低音</button></div></div>' +
       '<button type="button" class="go" id="f-go">开始第一段实验</button>',
     bind: function (root) {
-      var store = { vision: "", sr_exp: "" };
+      var store = { vision: "", sr_exp: "", order: "" };
       pickExclusive(root, "#f-vision button", "vision", store);
       pickExclusive(root, "#f-sr button", "sr_exp", store);
+      pickExclusive(root, "#f-order button", "order", store);
       root.querySelector("#f-pid").addEventListener("touchend", function (e) { e.stopPropagation(); });
       root.querySelector("#f-go").addEventListener("click", function (e) {
         e.stopPropagation();
         sessionMeta.participant_id = (root.querySelector("#f-pid").value || "").trim();
         sessionMeta.vision = store.vision;
         sessionMeta.sr_exp = store.sr_exp;
+        sessionMeta.order = store.order;
         if (!sessionMeta.participant_id) {
           speak("请先填写被试编号", GUIDE_RATE);
+          return;
+        }
+        if (!sessionMeta.order) {
+          speak("请选择实验顺序", GUIDE_RATE);
           return;
         }
         startProtocol();
@@ -1148,6 +1909,8 @@ function showIntake() {
   });
 }
 function showSurvey() {
+  var p = orderParts();
+  var orderNote = "本场顺序：" + p.order + "。第一段是" + condDesc(p.first) + "，第二段是" + condDesc(p.second) + "。";
   var answers = {
     pitch_disc: "",
     pitch_layer: "",
@@ -1159,17 +1922,17 @@ function showSurvey() {
   showForm({
     say: "查找做完了。接下来请研究助手把几道题读给你听，你口头回答，助手帮你点选。",
     html: '<div class="k">研究助手口述代填</div><h2>做完后的几道题</h2>' +
-      '<p class="meta">请把灰色说明读给被试听，被试说数字或选项，你点选。最后一题把原话记下来即可。</p>' +
-      scaleQ("pitch_disc", "1. 高低音能不能分出高、中、低", "刚才第二段那些高低音，你能不能听出至少高、中、低三档？一是完全听不出，五是很容易听出。", "听不出", "很容易") +
+      '<p class="meta">请把灰色说明读给被试听，被试说数字或选项，你点选。最后一题把原话记下来即可。<br>' + orderNote + "</p>" +
+      scaleQ("pitch_disc", "1. 高低音能不能分出高、中、低", "刚才带高低音的那些题，你能不能听出至少高、中、低三档？一是完全听不出，五是很容易听出。", "听不出", "很容易") +
       scaleQ("pitch_layer", "2. 高低音有没有帮你判断在哪一层", "这些高低音有没有帮你判断手指大概在哪一层？一是完全没有帮助，五是很有帮助。", "没有帮助", "很有帮助") +
-      '<div class="q"><div class="ql">3. 哪一段更好找</div>' +
-      '<p class="read">第一段只有语音，第二段有高低音。你觉得哪一段更好找？</p>' +
+      '<div class="q"><div class="ql">3. 哪一种更好找</div>' +
+      '<p class="read">一种只有语音，一种有高低音。你觉得哪一种更好找？（不按先后，按感觉）</p>' +
       '<div class="choice" id="q-which">' +
-      '<button type="button" data-v="c0">第一段更好</button>' +
+      '<button type="button" data-v="c0">只有语音更好</button>' +
       '<button type="button" data-v="same">差不多</button>' +
-      '<button type="button" data-v="c1">第二段更好</button></div></div>' +
-      scaleQ("effort_c0", "4. 第一段有多费力（只有语音）", "第一段只有语音、没有高低音。做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
-      scaleQ("effort_c1", "5. 第二段有多费力（有高低音）", "第二段有高低音。做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
+      '<button type="button" data-v="c1">有高低音更好</button></div></div>' +
+      scaleQ("effort_c0", "4. 只有语音有多费力", "只有语音、没有高低音的那些题，做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
+      scaleQ("effort_c1", "5. 有高低音有多费力", "有高低音的那些题，做起来有多费力？一是很轻松，五是很费力。", "很轻松", "很费力") +
       '<div class="q"><div class="ql">6. 实验还有什么可以改的</div>' +
       '<p class="read">你觉得刚才这套实验，还有什么可以改的？想到什么说什么。</p>' +
       '<textarea id="q-improve" placeholder="助手把原话记在这里"></textarea></div>' +
@@ -1200,21 +1963,82 @@ function scaleQ(key, title, read, low, high) {
     '<div class="ends"><span>' + low + "</span><span>" + high + "</span></div></div>";
 }
 function showDone() {
-  const scored = session.trials.filter(function (t) { return !t.phase; });
-  const ok = scored.filter(function (t) { return t.success; }).length;
-  const lines = scored.map(function (t) {
-    return (t.practice ? "练习" : (t.cond === "C0" ? "第一段" : "第二段")) + " " + t.title + "，" + (t.success ? "成功" : (t.timeout ? "超时" : "未完成")) + "，用时" + Math.round((t.time_ms || 0) / 1000) + "秒，点错" + t.n_errors + "次";
-  });
+  const all = session.trials.filter(function (t) { return !t.phase; });
+  const main = all.filter(function (t) { return !t.practice; });
+  const practice = all.filter(function (t) { return t.practice; });
+  const ok = main.filter(function (t) { return t.success; }).length;
+  const lineOf = function (t) {
+    const seg = t.practice ? "练习" : (segOf(t.cond) === 1 ? "第一段" : "第二段");
+    return seg + " " + t.title + "，" + (t.success ? "成功" : (t.timeout ? "超时" : "未完成")) + "，用时" + Math.round((t.time_ms || 0) / 1000) + "秒，点错" + t.n_errors + "次" + (t.first_hit_ms != null ? "，首次命中" + Math.round(t.first_hit_ms / 1000) + "秒" : "");
+  };
+  const body = [
+    "问卷已记下。顺序 " + (session.order || "") + "。主分析 " + ok + " / " + main.length + " 题成功。" + (practice.length ? " 练习另存，不进主分析。" : "")
+  ].concat(main.length ? ["【主分析】"].concat(main.map(lineOf)) : []).concat(practice.length ? ["【练习（不进主分析）】"].concat(practice.map(lineOf)) : []);
   showGuide({
     kicker: "全部结束",
     title: "谢谢，可以下载了",
-    body: ["问卷已记下。共完成 " + ok + " / " + scored.length + " 题。"].concat(lines),
+    body: body,
     say: "谢谢，题目和问卷都记下来了。",
     actions: [
       { label: "下载实验记录", run: downloadLog },
       { label: "下一被试（刷新页面）", alt: 1, run: function () { location.reload(); } }
     ]
   });
+}
+function trialCsvHead() {
+  return ["pid", "session_id", "order", "vision", "sr_exp", "trial_i", "cond", "practice", "tid", "title", "success", "timeout", "started_at", "ended_at", "time_ms", "time_s", "first_hit_ms", "first_hit_s", "focuses_to_first_hit", "n_errors", "n_focus", "n_unique", "n_revisits", "path_len", "path_efficiency", "n_repeat", "level_c0", "level_c1", "level_c2", "level_c3", "level_c4", "level_c5", "level_ms0", "level_ms1", "level_ms2", "level_ms3", "level_ms4", "level_ms5", "pitch_disc", "pitch_layer", "which_better", "effort_c0", "effort_c1", "improve"];
+}
+function trialCsvRow(t, i, attachSurvey) {
+  const pid = session.participant_id || "x";
+  const sid = session.session_id || "s";
+  const s = session.survey || {};
+  const ms = t.time_ms || 0;
+  const fh = t.first_hit_ms;
+  const lc = t.level_counts || [0, 0, 0, 0, 0, 0];
+  const lm = t.level_ms || [0, 0, 0, 0, 0, 0];
+  return [
+    csvCell(t.participant_id || pid),
+    csvCell(t.session_id || sid),
+    csvCell(t.order || session.order || ""),
+    csvCell(session.vision || ""),
+    csvCell(session.sr_exp || ""),
+    i + 1,
+    csvCell(t.cond || ""),
+    t.practice ? 1 : 0,
+    csvCell(t.tid || ""),
+    csvCell(t.title || ""),
+    t.success || 0,
+    t.timeout || 0,
+    csvCell(t.started_at || ""),
+    csvCell(t.ended_at || ""),
+    ms,
+    (ms / 1000).toFixed(3),
+    fh == null ? "" : fh,
+    fh == null ? "" : (fh / 1000).toFixed(3),
+    t.focuses_to_first_hit == null ? "" : t.focuses_to_first_hit,
+    t.n_errors || 0,
+    t.n_focus || 0,
+    t.n_unique || 0,
+    t.n_revisits || 0,
+    t.path_len || 0,
+    t.path_efficiency == null ? "" : t.path_efficiency,
+    t.n_repeat || 0,
+    lc[0] || 0, lc[1] || 0, lc[2] || 0, lc[3] || 0, lc[4] || 0, lc[5] || 0,
+    Math.round(lm[0] || 0), Math.round(lm[1] || 0), Math.round(lm[2] || 0), Math.round(lm[3] || 0), Math.round(lm[4] || 0), Math.round(lm[5] || 0),
+    csvCell(attachSurvey ? (s.pitch_disc || "") : ""),
+    csvCell(attachSurvey ? (s.pitch_layer || "") : ""),
+    csvCell(attachSurvey ? (s.which_better || "") : ""),
+    csvCell(attachSurvey ? (s.effort_c0 || "") : ""),
+    csvCell(attachSurvey ? (s.effort_c1 || "") : ""),
+    csvCell(attachSurvey ? (s.improve || "") : "")
+  ].join(",");
+}
+function downloadCsv(name, rows) {
+  const csv = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+  const b = document.createElement("a");
+  b.href = URL.createObjectURL(csv);
+  b.download = name;
+  b.click();
 }
 function downloadLog() {
   if (!session) return;
@@ -1228,43 +2052,20 @@ function downloadLog() {
   a.click();
   setTimeout(function () {
     const scored = (session.trials || []).filter(function (t) { return !t.phase; });
-    const s = session.survey || {};
-    const head = ["pid", "session_id", "vision", "sr_exp", "trial_i", "cond", "practice", "tid", "title", "success", "timeout", "started_at", "ended_at", "time_ms", "time_s", "n_errors", "n_focus", "pitch_disc", "pitch_layer", "which_better", "effort_c0", "effort_c1", "improve"];
-    const last = scored.length - 1;
-    const rows = [head.join(",")].concat(scored.map(function (t, i) {
-      const ms = t.time_ms || 0;
-      const surveyRow = i === last;
-      return [
-        csvCell(t.participant_id || pid),
-        csvCell(t.session_id || sid),
-        csvCell(session.vision || ""),
-        csvCell(session.sr_exp || ""),
-        i + 1,
-        csvCell(t.cond || ""),
-        t.practice ? 1 : 0,
-        csvCell(t.tid || ""),
-        csvCell(t.title || ""),
-        t.success || 0,
-        t.timeout || 0,
-        csvCell(t.started_at || ""),
-        csvCell(t.ended_at || ""),
-        ms,
-        (ms / 1000).toFixed(3),
-        t.n_errors || 0,
-        t.n_focus || 0,
-        csvCell(surveyRow ? (s.pitch_disc || "") : ""),
-        csvCell(surveyRow ? (s.pitch_layer || "") : ""),
-        csvCell(surveyRow ? (s.which_better || "") : ""),
-        csvCell(surveyRow ? (s.effort_c0 || "") : ""),
-        csvCell(surveyRow ? (s.effort_c1 || "") : ""),
-        csvCell(surveyRow ? (s.improve || "") : "")
-      ].join(",");
+    const main = scored.filter(function (t) { return !t.practice; });
+    const practice = scored.filter(function (t) { return !!t.practice; });
+    const head = trialCsvHead();
+    const mainRows = [head.join(",")].concat(main.map(function (t, i) {
+      return trialCsvRow(t, i, i === main.length - 1);
     }));
-    const csv = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
-    const b = document.createElement("a");
-    b.href = URL.createObjectURL(csv);
-    b.download = "hierarchytone-" + pid + "-" + sid + ".csv";
-    b.click();
+    downloadCsv("hierarchytone-" + pid + "-" + sid + "-main.csv", mainRows);
+    setTimeout(function () {
+      if (!practice.length) return;
+      const pracRows = [head.join(",")].concat(practice.map(function (t, i) {
+        return trialCsvRow(t, i, false);
+      }));
+      downloadCsv("hierarchytone-" + pid + "-" + sid + "-practice.csv", pracRows);
+    }, 400);
   }, 600);
 }
 function csvCell(v) {
@@ -1272,28 +2073,34 @@ function csvCell(v) {
   if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
-function buildTrials() {
+function buildTrials(order) {
+  const first = order === "C1-C0" ? "C1" : "C0";
+  const second = first === "C0" ? "C1" : "C0";
   const cart = { tid: "t-cart", title: "找到购物车", say: "请找到底部的购物车，找到以后在上面快速点两下。" };
   const ear = { tid: "t-seckill59", title: "找到五十九元的秒杀耳机", say: "请找到限时秒杀里，标价五十九元的无线耳机，找到以后快速点两下。耳机在秒杀横条里，可能需要双指向右滑。" };
+  const practiceSay = first === "C0"
+    ? "先做一题练习。请找到搜索按钮，找到以后快速点两下。这一题只能听到语音，听不到高低音。"
+    : "先做一题练习。请找到搜索按钮，找到以后快速点两下。这一题会先听到一声高低音，再听到名称。";
   return [
-    { phase: "brief-c0" },
-    { phase: "adapt-c0" },
-    { practice: 1, cond: "C0", tid: "t-search", title: "练习：找到搜索按钮", say: "先做一题练习。请找到搜索按钮，找到以后快速点两下。这一题只能听到语音，听不到高低音。" },
-    Object.assign({ cond: "C0" }, cart),
-    Object.assign({ cond: "C0" }, ear),
+    { phase: "brief", cond: first },
+    { phase: "adapt", cond: first },
+    { practice: 1, cond: first, tid: "t-search", title: "练习：找到搜索按钮", say: practiceSay },
+    Object.assign({ cond: first }, cart),
+    Object.assign({ cond: first }, ear),
     { phase: "break" },
-    { phase: "brief-c1" },
-    { phase: "adapt-c1" },
-    Object.assign({ cond: "C1" }, cart),
-    Object.assign({ cond: "C1" }, ear)
+    { phase: "brief", cond: second },
+    { phase: "adapt", cond: second },
+    Object.assign({ cond: second }, cart),
+    Object.assign({ cond: second }, ear)
   ];
 }
 function startProtocol() {
+  const order = sessionMeta.order === "C1-C0" ? "C1-C0" : "C0-C1";
   session = {
     t0: Date.now(),
     started_at: isoNow(),
     session_id: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
-    order: "C0-C1",
+    order: order,
     scene: "taobao",
     participant_id: sessionMeta.participant_id,
     vision: sessionMeta.vision,
@@ -1302,7 +2109,7 @@ function startProtocol() {
     events: [],
     survey: null
   };
-  trials = buildTrials();
+  trials = buildTrials(order);
   trialIndex = -1;
   persistSession();
   nextTrial();
@@ -1320,11 +2127,14 @@ function runTut() {
         title: "这是实验用的淘宝首页",
         body: [
           "不是真的购物。请戴上耳机。",
-          "一根手指慢慢滑，用来摸；摸到要选的东西，在那一项上快速点两下，才算选中。两根手指一起滑，用来翻页。",
-          "接下来每一层都会先连着播三次，每次都是先高低音、再说话。听完三次再讲这一层是干什么的。"
+          "一根手指慢慢滑：播该项原本的名称信息。",
+          "一根手指左右轻扫：像手机读屏一样，切到上一项或下一项。",
+          "两根手指上翻或下翻：也会播当前项的原本信息；左翻右翻用于频道、秒杀等横条。翻到头会提示。",
+          "做题时若忘记题目：三指轻点屏幕重听。",
+          "摸到要选的东西，在那一项上快速点两下才算选中。接下来每一层都会先连着播三次。"
         ],
         hint: "点屏幕任意位置继续",
-        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，用来摸。摸到要选的东西，在那一项上快速点两下，才算选中。两根手指一起滑，用来翻页。接下来每一层都会先连着播三次，每次都是先高低音，再说话。请点屏幕任意位置继续。",
+        say: "这是实验用的淘宝首页，不是真的购物。请戴上耳机。一根手指慢慢滑，会播该项原本的名称信息。两根手指上翻或下翻，也会播原本信息。做题忘记题目时，三指轻点重听。摸到要选的东西，快速点两下才算选中。请点屏幕任意位置继续。",
         next: tutAdvance
       });
     },
@@ -1418,7 +2228,7 @@ function runTut() {
         ghost: 1,
         say: "请用一根手指慢慢滑。点屏幕开始滑。",
         next: function () {
-          beginTry("explore", true, nextTut, "请用一根手指在屏幕上慢慢滑。摸到哪里会先出高低音，再读名称。滑过三个不同的地方，就会自动继续。");
+          beginTry("explore", true, nextTut, "请用一根手指在屏幕上慢慢滑。摸到时会播该项原本的名称信息。滑过三个不同的地方，就会自动继续。");
         }
       });
     },
@@ -1427,16 +2237,16 @@ function runTut() {
         ghost: 1,
         say: "接下来试选中。摸到以后要快速点两下。点屏幕开始试。",
         next: function () {
-          beginTry("activate", true, nextTut, "请把手指停在任意一项上，快速点两下。这表示选中。点对了会说话告诉你。");
+          beginTry("activate", true, nextTut, "请把手指停在任意一项上，快速点两下。这表示选中。点对了会告诉你选中了哪里。");
         }
       });
     },
     function () {
       showGuide({
         ghost: 1,
-        say: "接下来试翻页。要用两根手指一起滑。点屏幕开始翻。",
+        say: "接下来试双指翻页。点屏幕开始试。",
         next: function () {
-          beginTry("pan", true, nextTut, "请用两根手指一起上下滑，或者左右滑。翻到了会说话告诉你。");
+          beginTry("pan", true, nextTut, "请用两根手指上翻或下翻。翻动时会播当前项的原本信息。翻一段就会继续。");
         }
       });
     }
@@ -1451,12 +2261,43 @@ function unlock() {
   }
   armed = true;
   mandarinVoice = pickMandarinVoice();
-  ensureAudio();
+  withAudio(function (c) {
+    // 开场轻触一声，确认音高通路已唤醒
+    const o = c.createOscillator(), g = c.createGain();
+    const t0 = c.currentTime;
+    o.frequency.value = 523.25;
+    o.type = "sine";
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(0.25, t0 + 0.01);
+    g.gain.linearRampToValueAtTime(0.0001, t0 + 0.08);
+    o.connect(g); g.connect(c.destination);
+    o.start(t0); o.stop(t0 + 0.1);
+  });
   gate.remove();
   tut = 0;
   runTut();
 }
 gate.addEventListener("click", unlock);
+// 屏蔽双指捏合 / 双击放大，避免和实验手势冲突（iOS 常忽略 user-scalable=no）
+(function blockPageZoom() {
+  function stop(e) { e.preventDefault(); }
+  ["gesturestart", "gesturechange", "gestureend"].forEach(function (type) {
+    document.addEventListener(type, stop, { passive: false });
+  });
+  document.addEventListener("touchmove", function (e) {
+    if (e.touches && e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+  var lastTouchEnd = 0;
+  document.addEventListener("touchend", function (e) {
+    var now = Date.now();
+    if (now - lastTouchEnd <= 320) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+  try {
+    document.documentElement.style.touchAction = "none";
+    document.body.style.touchAction = "none";
+  } catch (err) {}
+})();
 </script>
 </body>
 </html>
